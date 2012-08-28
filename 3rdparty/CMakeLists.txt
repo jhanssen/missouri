@@ -13,7 +13,7 @@ endif()
 set(X264_LIBS -L${CMAKE_CURRENT_SOURCE_DIR}/lib)
 set(X264_INCS -I${CMAKE_CURRENT_SOURCE_DIR}/include)
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    set(X264_LIBS ${X264_LIBS} -framework CoreFoundation -framework CoreVideo -framework VideoDecodeAcceleration)
+    set(X264_LIBS "${X264_LIBS} -framework CoreFoundation -framework CoreVideo -framework VideoDecodeAcceleration")
 endif()
 
 ExternalProject_Add(
