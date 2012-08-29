@@ -12,6 +12,13 @@ set(server_LIBS
     ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavutil.a
 )
 
+set(server_SRCS
+    main.cpp
+    GDICapturer.cpp
+    Encoder.cpp
+    UdpServer.cpp
+)
+
 include_directories(${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/include)
-add_executable(server main.cpp GDICapturer.cpp Encoder.cpp)
-target_link_libraries(server ${server_LIBS} -lpthread)
+add_executable(server ${server_SRCS})
+target_link_libraries(server ${server_LIBS} -lpthread -lws2_32)
