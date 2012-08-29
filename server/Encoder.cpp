@@ -3,6 +3,7 @@
 #include <sched.h>
 extern "C" {
 #include <x264.h>
+#include <libswscale/swscale.h>
 }
 
 class EncoderPrivate
@@ -18,6 +19,8 @@ public:
     x264_t* encoder;
     x264_picture_t pic_in, pic_out;
 
+    SwsContext* scale;
+
     pthread_t thread;
     pthread_mutex_t mutex;
     pthread_cond_t encodeCond, doneCond;
@@ -29,6 +32,8 @@ public:
 void* EncoderPrivate::run(void* arg)
 {
     EncoderPrivate* priv = static_cast<EncoderPrivate*>(arg);
+    const int32_t w = priv->width;
+    const int32_t h = priv->height;
     for (;;) {
         pthread_mutex_lock(&priv->mutex);
 
@@ -37,7 +42,14 @@ void* EncoderPrivate::run(void* arg)
         }
         pthread_mutex_unlock(&priv->mutex);
 
-        // do the actual encoding here
+        int srcstride = w * 3; // RGB stride is 3 * width
+        sws_scale(priv->scale, &priv->input, &srcstride, 0, h, priv->pic_in.img.plane, priv->pic_in.img.i_stride);
+        x264_nal_t* nals;
+        int i_nals;
+        const int frame_size = x264_encoder_encode(priv->encoder, &nals, &i_nals, &priv->pic_in, &priv->pic_out);
+        if (frame_size >= 0) {
+            // OK
+        }
 
         pthread_mutex_lock(&priv->mutex);
         priv->encoding = false;
@@ -81,6 +93,8 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
 
     mPriv->encoder = x264_encoder_open(&param);
     x264_picture_alloc(&mPriv->pic_in, X264_CSP_I420, width, height);
+
+    mPriv->scale = sws_getContext(width, height, PIX_FMT_RGB24, 1440, 900, PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL);
 
     mPriv->encoding = false;
     pthread_mutex_init(&mPriv->mutex, 0);
