@@ -37,7 +37,6 @@ void* EncoderPrivate::run(void* arg)
     int frame = 0;
     for (;;) {
         pthread_mutex_lock(&priv->mutex);
-
         while (!priv->encoding) {
             pthread_cond_wait(&priv->encodeCond, &priv->mutex);
         }
@@ -51,6 +50,12 @@ void* EncoderPrivate::run(void* arg)
         if (frame_size >= 0) {
             printf("frame %d, size %d\n", frame, frame_size);
             ++frame;
+
+            for (int i = 0; i < i_nals; ++i) {
+                const int packetSize = nals[i].i_payload;
+                const uint8_t* payload = nals[i].p_payload;
+                printf("nal %d (%d %p)\n", i, packetSize, payload);
+            }
         } else {
             fprintf(stderr, "bad frame!\n");
         }
