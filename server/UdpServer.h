@@ -9,6 +9,8 @@ public:
     UdpServer(int port);
     ~UdpServer();
 
+    bool isListening() const;
+
 private:
     UdpServerPrivate* mPriv;
 };
