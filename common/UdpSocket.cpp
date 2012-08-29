@@ -1,17 +1,49 @@
 #include "UdpSocket.h"
-#include <Winsock2.h>
+#ifdef OS_Windows
+# include <Winsock2.h>
+#else
+# include <sys/types.h>
+# include <sys/socket.h>
+# include <netinet/in.h>
+# include <string.h>
+# include <errno.h>
+#endif
 #include <string>
 #include <pthread.h>
 #include <stdio.h>
+#include <assert.h>
 
-static inline std::string wsaErrorMessage(int error)
+static inline std::string socketErrorMessage(int error)
 {
+#ifdef OS_Windows
     LPSTR errString = NULL;
     (void)FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, 0, error, 0, (LPSTR)&errString, 0, 0);
     std::string str(errString);
     LocalFree(errString);
     return str;
+#else
+    static const size_t buflen = 1024;
+    static char buf[buflen];
+    (void)strerror_r(error, buf, buflen);
+    return std::string(buf);
+#endif
 }
+
+static inline int socketError()
+{
+#ifdef OS_Windows
+    return WSAGetLastError();
+#else
+    return errno;
+#endif
+}
+
+#ifndef OS_Windows
+#define SOCKET_ERROR -1
+#define INVALID_SOCKET -1
+
+typedef int SOCKET;
+#endif
 
 class UdpSocketPrivate
 {
@@ -29,7 +61,8 @@ public:
 void* UdpSocketPrivate::run(void* arg)
 {
     sockaddr_in from;
-    int fromlen, ret;
+    socklen_t fromlen;
+    int ret;
     timeval tv;
     fd_set fds;
     char buf[4096];
@@ -45,10 +78,11 @@ void* UdpSocketPrivate::run(void* arg)
 
         ret = select(priv->server + 1, &fds, 0, 0, &tv);
         if (ret == SOCKET_ERROR) {
-            const int err = WSAGetLastError();
-            fprintf(stderr, "socket failed: %d %s\n", err, wsaErrorMessage(err).c_str());
+            const int err = socketError();
+            fprintf(stderr, "socket failed: %d %s\n", err, socketErrorMessage(err).c_str());
             return 0;
         } else if (ret > 0) {
+            assert(FD_ISSET(priv->server, &fds));
             fromlen = sizeof(from);
             ret = recvfrom(priv->server, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&from), &fromlen);
             printf("got socket data %d\n", ret);
@@ -73,12 +107,14 @@ UdpSocket::UdpSocket(int port)
     mPriv->stopped = false;
     int ret;
 
+#ifdef OS_Windows
     WSADATA data;
     ret = WSAStartup(0x0202, &data);
     if (ret) {
-        fprintf(stderr, "WSAStartup failed: %d %s\n", ret, wsaErrorMessage(ret).c_str());
+        fprintf(stderr, "WSAStartup failed: %d %s\n", ret, socketErrorMessage(ret).c_str());
         return;
     }
+#endif
 
     sockaddr_in local;
     local.sin_family = AF_INET;
@@ -86,16 +122,22 @@ UdpSocket::UdpSocket(int port)
     local.sin_port = htons(port);
     mPriv->server = socket(AF_INET, SOCK_DGRAM, 0);
     if (mPriv->server == INVALID_SOCKET) {
-        const int err = WSAGetLastError();
-        fprintf(stderr, "socket failed: %d %s\n", err, wsaErrorMessage(err).c_str());
+        const int err = socketError();
+        fprintf(stderr, "socket failed: %d %s\n", err, socketErrorMessage(err).c_str());
+#ifdef OS_Windows
         WSACleanup();
+#endif
         return;
     }
     if (bind(mPriv->server, reinterpret_cast<sockaddr*>(&local), sizeof(local))) {
-        const int err = WSAGetLastError();
-        fprintf(stderr, "bind on port %d failed: %d %s\n", port, err, wsaErrorMessage(err).c_str());
+        const int err = socketError();
+        fprintf(stderr, "bind on port %d failed: %d %s\n", port, err, socketErrorMessage(err).c_str());
+#ifdef OS_Windows
         closesocket(mPriv->server);
         WSACleanup();
+#else
+        close(mPriv->server);
+#endif
         return;
     }
 
@@ -115,9 +157,13 @@ UdpSocket::~UdpSocket()
         pthread_join(mPriv->thread, &ret);
         pthread_mutex_destroy(&mPriv->mutex);
 
+#ifdef OS_Windows
         closesocket(mPriv->server);
 
         WSACleanup();
+#else
+        close(mPriv->server);
+#endif
     }
 
     delete mPriv;

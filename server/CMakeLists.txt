@@ -10,6 +10,7 @@ set(server_LIBS
     ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libx264.a
     ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libswscale.a
     ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavutil.a
+    -lpthread -lws2_32
 )
 
 set(server_SRCS
@@ -21,4 +22,4 @@ set(server_SRCS
 
 include_directories(${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/../common ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/include)
 add_executable(server ${server_SRCS})
-target_link_libraries(server ${server_LIBS} -lpthread -lws2_32)
+target_link_libraries(server ${server_LIBS})
