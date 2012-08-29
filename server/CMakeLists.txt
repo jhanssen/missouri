@@ -6,5 +6,5 @@ endif()
 add_definitions(-DOS_${CMAKE_SYSTEM_NAME})
 
 include_directories(${CMAKE_CURRENT_LIST_DIR})
-add_executable(server main.cpp)
+add_executable(server main.cpp GDICapturer.cpp)
 target_link_libraries(server)
