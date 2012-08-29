@@ -121,3 +121,13 @@ void Encoder::encode()
     pthread_cond_signal(&mPriv->encodeCond);
     pthread_mutex_unlock(&mPriv->mutex);
 }
+
+const uint8_t* Encoder::outputBuffer() const
+{
+    return mPriv->output;
+}
+
+uint32_t Encoder::outputSize() const
+{
+    return mPriv->outputSize;
+}
