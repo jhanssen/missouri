@@ -5,7 +5,16 @@
 
 #include "GDICapturer.h"
 
-bool GDICapturer::Init()
+GDICapturer::GDICapturer()
+{
+    Init();
+}
+
+GDICapturer::~GDICapturer()
+{
+}
+
+void GDICapturer::Init()
 {
     mScreen = GetDC(NULL);
     mTarget = CreateCompatibleDC(mScreen);
@@ -32,11 +41,6 @@ bool GDICapturer::Init()
     mBminfo.bmiHeader.biClrImportant = 0;
 	
     mBmpBuffer = new uint8_t[mBminfo.bmiHeader.biSizeImage];
-
-    ret = BitBlt(mTarget, 0, 0, mWidth, mHeight, mScreen, 0, 0, SRCCOPY | CAPTUREBLT);
-    assert(ret);
-
-    return true;
 }
 
 bool GDICapturer::Capture()

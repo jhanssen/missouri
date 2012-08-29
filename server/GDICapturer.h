@@ -11,15 +11,16 @@ public:
     GDICapturer();
     ~GDICapturer();
 
-    bool Init();
     bool Capture();
     bool CaptureBmp(const std::string& name);
     uint8_t *GetBuffer() { return mBmpBuffer; }
 
-    // only valid after init
     int32_t GetWidth() { return mWidth; }
     int32_t GetHeight() { return mHeight; }
     int32_t GetImageSize() { return mBminfo.bmiHeader.biSizeImage; }
+
+private:
+    void Init();
 
 private:
     HDC mScreen;
