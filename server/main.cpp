@@ -6,6 +6,8 @@
 int main(int argc, char** argv)
 {
     UdpSocket server(21047);
+    if (!server.isListening())
+        return 1;
 
     GDICapturer cap;
     const uint8_t* buffer = cap.GetBuffer();
