@@ -34,6 +34,7 @@ void* EncoderPrivate::run(void* arg)
     EncoderPrivate* priv = static_cast<EncoderPrivate*>(arg);
     const int32_t w = priv->width;
     const int32_t h = priv->height;
+    int frame = 0;
     for (;;) {
         pthread_mutex_lock(&priv->mutex);
 
@@ -48,7 +49,10 @@ void* EncoderPrivate::run(void* arg)
         int i_nals;
         const int frame_size = x264_encoder_encode(priv->encoder, &nals, &i_nals, &priv->pic_in, &priv->pic_out);
         if (frame_size >= 0) {
-            // OK
+            printf("frame %d, size %d\n", frame, frame_size);
+            ++frame;
+        } else {
+            fprintf(stderr, "bad frame!\n");
         }
 
         pthread_mutex_lock(&priv->mutex);
