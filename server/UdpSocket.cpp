@@ -1,4 +1,4 @@
-#include "UdpServer.h"
+#include "UdpSocket.h"
 #include <Winsock2.h>
 #include <string>
 #include <pthread.h>
@@ -13,7 +13,7 @@ static inline std::string wsaErrorMessage(int error)
     return str;
 }
 
-class UdpServerPrivate
+class UdpSocketPrivate
 {
 public:
     bool listening, stopped;
@@ -26,7 +26,7 @@ public:
     static void* run(void* arg);
 };
 
-void* UdpServerPrivate::run(void* arg)
+void* UdpSocketPrivate::run(void* arg)
 {
     sockaddr_in from;
     int fromlen, ret;
@@ -34,7 +34,7 @@ void* UdpServerPrivate::run(void* arg)
     fd_set fds;
     char buf[4096];
 
-    UdpServerPrivate* priv = static_cast<UdpServerPrivate*>(arg);
+    UdpSocketPrivate* priv = static_cast<UdpSocketPrivate*>(arg);
 
     for (;;) {
         tv.tv_sec = 5;
@@ -66,8 +66,8 @@ void* UdpServerPrivate::run(void* arg)
     return 0;
 }
 
-UdpServer::UdpServer(int port)
-    : mPriv(new UdpServerPrivate)
+UdpSocket::UdpSocket(int port)
+    : mPriv(new UdpSocketPrivate)
 {
     mPriv->listening = false;
     mPriv->stopped = false;
@@ -100,12 +100,12 @@ UdpServer::UdpServer(int port)
     }
 
     pthread_mutex_init(&mPriv->mutex, 0);
-    pthread_create(&mPriv->thread, 0, UdpServerPrivate::run, mPriv);
+    pthread_create(&mPriv->thread, 0, UdpSocketPrivate::run, mPriv);
 
     mPriv->listening = true;
 }
 
-UdpServer::~UdpServer()
+UdpSocket::~UdpSocket()
 {
     if (mPriv->listening) {
         void* ret;
@@ -123,7 +123,7 @@ UdpServer::~UdpServer()
     delete mPriv;
 }
 
-bool UdpServer::isListening() const
+bool UdpSocket::isListening() const
 {
     return mPriv->listening;
 }
