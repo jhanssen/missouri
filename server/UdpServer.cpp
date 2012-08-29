@@ -43,7 +43,7 @@ void* UdpServerPrivate::run(void* arg)
         FD_ZERO(&fds);
         FD_SET(priv->server, &fds);
 
-        ret = select(-1, &fds, 0, 0, &tv);
+        ret = select(priv->server + 1, &fds, 0, 0, &tv);
         if (ret == SOCKET_ERROR) {
             const int err = WSAGetLastError();
             fprintf(stderr, "socket failed: %d %s\n", err, wsaErrorMessage(err).c_str());
