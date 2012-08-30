@@ -21,6 +21,10 @@ Decoder::Decoder()
 
 void Decoder::init(const uint8_t* extradata, int extrasize)
 {
+    if (mInited)
+        return;
+    mInited = true;
+
     const int inWidth = 1440;
     const int inHeight = 900;
 
