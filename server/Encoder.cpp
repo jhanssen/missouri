@@ -20,6 +20,9 @@ public:
     x264_t* encoder;
     x264_picture_t pic_in, pic_out;
 
+    x264_nal_t *headers;
+    int i_nal;
+
     SwsContext* scale;
 
     pthread_t thread;
@@ -109,6 +112,19 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     x264_param_apply_profile(&param, "baseline");
 
     mPriv->encoder = x264_encoder_open(&param);
+
+    x264_encoder_headers(mPriv->encoder, &mPriv->headers, &mPriv->i_nal);
+    /*
+    p_nal = headers
+    int sps_size = p_nal[0].i_payload - 4;
+    int pps_size = p_nal[1].i_payload - 4;
+    int sei_size = p_nal[2].i_payload;
+
+    uint8_t *sps = p_nal[0].p_payload + 4;
+    uint8_t *pps = p_nal[1].p_payload + 4;
+    uint8_t *sei = p_nal[2].p_payload;
+    */
+
     x264_picture_alloc(&mPriv->pic_in, X264_CSP_I420, width, height);
 
     mPriv->scale = sws_getContext(width, height, PIX_FMT_RGB24, 1440, 900, PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL);
