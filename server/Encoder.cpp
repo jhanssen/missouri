@@ -20,6 +20,7 @@ public:
     x264_t* encoder;
     x264_picture_t pic_in, pic_out;
 
+    int headerSize;
     uint8_t* sps;
     int spsSize;
     uint8_t* pps;
@@ -124,7 +125,17 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     */
     x264_nal_t* p_nal;
     int i_nal;
-    x264_encoder_headers(mPriv->encoder, &p_nal, &i_nal);
+    mPriv->headerSize = x264_encoder_headers(mPriv->encoder, &p_nal, &i_nal);
+
+    if (i_nal != 3 || p_nal[0].i_type != NAL_SPS || p_nal[1].i_type != NAL_PPS
+        || p_nal[0].i_payload < 4 || p_nal[1].i_payload < 1) {
+        fprintf(stderr, "Incorrect x264 header!\n");
+        exit(0);
+    }
+
+#if (X264_BUILD < 76)
+# error x264 version too old
+#endif
 
     mPriv->spsSize = p_nal[0].i_payload - 4;
     mPriv->sps = new uint8_t[mPriv->spsSize];
