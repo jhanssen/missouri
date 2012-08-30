@@ -23,6 +23,7 @@ public:
 
 private:
     // a bit hacky
+    friend class TcpServerPrivate;
     void setSocketDescriptor(void* socket);
 
     TcpSocketPrivate* mPriv;

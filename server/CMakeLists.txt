@@ -20,6 +20,7 @@ set(server_SRCS
     ../common/Host.cpp
     ../common/UdpSocket.cpp
     ../common/TcpSocket.cpp
+    ../common/TcpServer.cpp
 )
 
 include_directories(${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/../common ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/include)

@@ -14,6 +14,7 @@ set(client_SRCS
     ../common/Host.cpp
     ../common/UdpSocket.cpp
     ../common/TcpSocket.cpp
+    ../common/TcpServer.cpp
 )
 
 set(client_LIBS
