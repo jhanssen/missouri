@@ -4,7 +4,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 add_definitions(-DOS_${CMAKE_SYSTEM_NAME})
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 
 set(server_LIBS
     ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libx264.a

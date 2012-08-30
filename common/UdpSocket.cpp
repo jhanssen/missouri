@@ -51,6 +51,9 @@ public:
     bool listening, stopped;
 
     SOCKET server;
+    SOCKET client;
+
+    sockaddr_in to;
 
     pthread_t thread;
     pthread_mutex_t mutex;
@@ -100,51 +103,12 @@ void* UdpSocketPrivate::run(void* arg)
     return 0;
 }
 
-UdpSocket::UdpSocket(int port)
+UdpSocket::UdpSocket()
     : mPriv(new UdpSocketPrivate)
 {
+    memset(&mPriv->to, 0, sizeof(sockaddr_in));
     mPriv->listening = false;
     mPriv->stopped = false;
-    int ret;
-
-#ifdef OS_Windows
-    WSADATA data;
-    ret = WSAStartup(0x0202, &data);
-    if (ret) {
-        fprintf(stderr, "WSAStartup failed: %d %s\n", ret, socketErrorMessage(ret).c_str());
-        return;
-    }
-#endif
-
-    sockaddr_in local;
-    local.sin_family = AF_INET;
-    local.sin_addr.s_addr = INADDR_ANY;
-    local.sin_port = htons(port);
-    mPriv->server = socket(AF_INET, SOCK_DGRAM, 0);
-    if (mPriv->server == INVALID_SOCKET) {
-        const int err = socketError();
-        fprintf(stderr, "socket failed: %d %s\n", err, socketErrorMessage(err).c_str());
-#ifdef OS_Windows
-        WSACleanup();
-#endif
-        return;
-    }
-    if (bind(mPriv->server, reinterpret_cast<sockaddr*>(&local), sizeof(local))) {
-        const int err = socketError();
-        fprintf(stderr, "bind on port %d failed: %d %s\n", port, err, socketErrorMessage(err).c_str());
-#ifdef OS_Windows
-        closesocket(mPriv->server);
-        WSACleanup();
-#else
-        close(mPriv->server);
-#endif
-        return;
-    }
-
-    pthread_mutex_init(&mPriv->mutex, 0);
-    pthread_create(&mPriv->thread, 0, UdpSocketPrivate::run, mPriv);
-
-    mPriv->listening = true;
 }
 
 UdpSocket::~UdpSocket()
@@ -165,8 +129,100 @@ UdpSocket::~UdpSocket()
         close(mPriv->server);
 #endif
     }
+    if (mPriv->to.sin_addr.s_addr) {
+        close(mPriv->client);
+    }
 
     delete mPriv;
+}
+
+bool UdpSocket::listen(uint16_t port)
+{
+    if (mPriv->listening)
+        return false;
+
+#ifdef OS_Windows
+    WSADATA data;
+    const int ret = WSAStartup(0x0202, &data);
+    if (ret) {
+        fprintf(stderr, "WSAStartup failed: %d %s\n", ret, socketErrorMessage(ret).c_str());
+        return false;
+    }
+#endif
+
+    sockaddr_in local;
+    local.sin_family = AF_INET;
+    local.sin_addr.s_addr = INADDR_ANY;
+    local.sin_port = htons(port);
+    mPriv->server = socket(AF_INET, SOCK_DGRAM, 0);
+    if (mPriv->server == INVALID_SOCKET) {
+        const int err = socketError();
+        fprintf(stderr, "socket failed: %d %s\n", err, socketErrorMessage(err).c_str());
+#ifdef OS_Windows
+        WSACleanup();
+#endif
+        return false;
+    }
+    if (bind(mPriv->server, reinterpret_cast<sockaddr*>(&local), sizeof(local))) {
+        const int err = socketError();
+        fprintf(stderr, "bind on port %d failed: %d %s\n", port, err, socketErrorMessage(err).c_str());
+#ifdef OS_Windows
+        closesocket(mPriv->server);
+        WSACleanup();
+#else
+        close(mPriv->server);
+#endif
+        return false;
+    }
+
+    pthread_mutex_init(&mPriv->mutex, 0);
+    pthread_create(&mPriv->thread, 0, UdpSocketPrivate::run, mPriv);
+
+    mPriv->listening = true;
+}
+
+bool UdpSocket::send(const Host& host, const char* data, int size)
+{
+    const uint32_t addr = host.address();
+    const uint16_t port = htons(host.port());
+    sockaddr_in& to = mPriv->to;
+
+    if (to.sin_addr.s_addr != addr || to.sin_port != port) {
+        if (to.sin_addr.s_addr)
+            close(mPriv->client);
+        to.sin_family = AF_INET;
+        to.sin_addr.s_addr = addr;
+        to.sin_port = port;
+        mPriv->client = socket(AF_INET, SOCK_DGRAM, 0);
+        if (mPriv->client == INVALID_SOCKET) {
+            memset(&to, 0, sizeof(sockaddr_in));
+
+            const int err = socketError();
+            fprintf(stderr, "socket failed in send: %d %s\n", err, socketErrorMessage(err).c_str());
+
+            return false;
+        }
+    }
+
+    int err;
+    ssize_t total = 0, sent;
+    do {
+        sent = sendto(mPriv->client, &data[total], size - total, 0, reinterpret_cast<sockaddr*>(&to), sizeof(sockaddr_in));
+        if (sent == SOCKET_ERROR) {
+            const int err = socketError();
+            if (err == EINTR)
+                continue;
+            fprintf(stderr, "sendto failed in send: %d %s\n", err, socketErrorMessage(err).c_str());
+
+            close(mPriv->client);
+            memset(&to, 0, sizeof(sockaddr_in));
+            return false;
+        }
+        total += sent;
+    } while (total < size);
+
+    assert(total == size);
+    return true;
 }
 
 bool UdpSocket::isListening() const

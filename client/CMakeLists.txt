@@ -4,9 +4,11 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 add_definitions(-DOS_${CMAKE_SYSTEM_NAME})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 
 set(client_SRCS
     main.cpp
+    ../common/Host.cpp
     ../common/UdpSocket.cpp
 )
 
