@@ -17,7 +17,6 @@ public:
     bool isListening() const;
 
     bool send(const Host& host, const char* data, int size);
-    bool send(const Host& host, uint32_t data);
 
     static std::string socketErrorMessage(int error);
 

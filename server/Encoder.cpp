@@ -35,6 +35,9 @@ void* EncoderPrivate::run(void* arg)
     Host host("192.168.11.120", 27584);
     UdpSocket socket;
 
+    int sendBufferSize = 1500;
+    char* sendBuffer = static_cast<char*>(malloc(sendBufferSize + 4));
+
     EncoderPrivate* priv = static_cast<EncoderPrivate*>(arg);
     const int32_t w = priv->width;
     const int32_t h = priv->height;
@@ -60,8 +63,15 @@ void* EncoderPrivate::run(void* arg)
                 const uint8_t* payload = nals[i].p_payload;
                 //printf("nal %d (%d %p)\n", i, packetSize, payload);
 
-                socket.send(host, packetSize);
-                socket.send(host, reinterpret_cast<const char*>(payload), packetSize);
+                if (packetSize > sendBufferSize) {
+                    sendBuffer = static_cast<char*>(realloc(sendBuffer, packetSize + 4));
+                    sendBufferSize = packetSize;
+                }
+
+                // should probably be improved, but I want both the size and the data to be in the same datagram
+                memcpy(sendBuffer, &packetSize, 4);
+                memcpy(sendBuffer + 4, payload, packetSize);
+                socket.send(host, sendBuffer, packetSize + 4);
             }
         } else {
             fprintf(stderr, "bad frame!\n");
@@ -73,6 +83,9 @@ void* EncoderPrivate::run(void* arg)
         pthread_mutex_unlock(&priv->mutex);
         sched_yield();
     }
+
+    free(sendBuffer);
+
     return 0;
 }
 
