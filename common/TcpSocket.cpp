@@ -210,4 +210,9 @@ void TcpSocket::setSocketDescriptor(void* socket)
     if (mPriv->connected)
         return;
     mPriv->client = reinterpret_cast<SOCKET>(socket);
+
+    pthread_mutex_init(&mPriv->mutex, 0);
+    pthread_create(&mPriv->thread, 0, TcpSocketPrivate::run, mPriv);
+
+    mPriv->connected = true;
 }
