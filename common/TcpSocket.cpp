@@ -71,8 +71,6 @@ public:
 
 void* TcpSocketPrivate::run(void* arg)
 {
-    sockaddr_in from;
-    socklen_t fromlen;
     int ret;
     timeval tv;
     fd_set fds;
@@ -90,19 +88,18 @@ void* TcpSocketPrivate::run(void* arg)
         ret = select(priv->client + 1, &fds, 0, 0, &tv);
         if (ret == SOCKET_ERROR) {
             const int err = socketError();
-            fprintf(stderr, "socket failed: %d %s\n", err, socketErrorMessage(err).c_str());
+            fprintf(stderr, "TcpSocket select failed: %d %s\n", err, socketErrorMessage(err).c_str());
             return 0;
         } else if (ret > 0) {
             assert(FD_ISSET(priv->client, &fds));
-            fromlen = sizeof(from);
             ret = recv(priv->client, buf, sizeof(buf), 0);
             if (ret == 0) {
                 // connection closed
 #warning remember to handle connection closed here
-                printf("connection closed\n");
+                printf("TcpSocket connection closed\n");
                 return 0;
             }
-            printf("got socket data %d\n", ret);
+            printf("TcpSocket got socket data %d\n", ret);
             if (priv->callback && !priv->callback(buf, ret, priv->userData)) {
                 return 0;
             }
@@ -163,12 +160,12 @@ bool TcpSocket::connect(const Host& host)
     mPriv->client = socket(AF_INET, SOCK_STREAM, 0);
     if (mPriv->client == INVALID_SOCKET) {
         const int err = socketError();
-        fprintf(stderr, "socket failed: %d %s\n", err, socketErrorMessage(err).c_str());
+        fprintf(stderr, "TcpSocket socket failed: %d %s\n", err, socketErrorMessage(err).c_str());
         return false;
     }
     if (::connect(mPriv->client, reinterpret_cast<sockaddr*>(&local), sizeof(local))) {
         const int err = socketError();
-        fprintf(stderr, "connect to %u:%u failed: %d %s\n", host.address(), host.port(), err, socketErrorMessage(err).c_str());
+        fprintf(stderr, "TcpSocket connect to %u:%u failed: %d %s\n", host.address(), host.port(), err, socketErrorMessage(err).c_str());
         close(mPriv->client);
         return false;
     }
@@ -191,7 +188,7 @@ bool TcpSocket::send(const char* data, int size)
             const int err = socketError();
             if (err == EINTR)
                 continue;
-            fprintf(stderr, "sendto failed in send: %d %s\n", err, socketErrorMessage(err).c_str());
+            fprintf(stderr, "TcpSocket send failed in send: %d %s\n", err, socketErrorMessage(err).c_str());
 
             close(mPriv->client);
             return false;
