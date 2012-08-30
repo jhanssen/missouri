@@ -59,7 +59,7 @@ void* EncoderPrivate::run(void* arg)
             ++frame;
 
             for (int i = 0; i < i_nals; ++i) {
-                const int packetSize = nals[i].i_payload;
+                const int packetSize = nals[i].i_payload - 4; // ### right?
                 const uint8_t* payload = nals[i].p_payload;
                 //printf("nal %d (%d %p)\n", i, packetSize, payload);
 
@@ -139,6 +139,18 @@ Encoder::~Encoder()
     pthread_cond_destroy(&mPriv->doneCond);
     pthread_mutex_destroy(&mPriv->mutex);
     delete mPriv;
+}
+
+void Encoder::getSps(uint8_t** payload, int* size)
+{
+    *payload = mPriv->headers[0].p_payload + 4;
+    *size = mPriv->headers[0].i_payload - 4;
+}
+
+void Encoder::getPps(uint8_t** payload, int* size)
+{
+    *payload = mPriv->headers[1].p_payload + 4;
+    *size = mPriv->headers[1].i_payload - 4;
 }
 
 void Encoder::encode()

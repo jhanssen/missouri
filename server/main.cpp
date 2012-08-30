@@ -11,6 +11,17 @@ static bool newSocket(TcpSocket* socket, void* userData)
 {
     Encoder* enc = static_cast<Encoder*>(userData);
     printf("got connection, encoder %p\n", enc);
+
+    uint8_t* payload;
+    int32_t size;
+
+    enc->getSps(&payload, &size);
+    socket->send(reinterpret_cast<char*>(&size), 4);
+    socket->send(reinterpret_cast<char*>(payload), size);
+
+    enc->getPps(&payload, &size);
+    socket->send(reinterpret_cast<char*>(&size), 4);
+    socket->send(reinterpret_cast<char*>(payload), size);
 }
 
 int main(int argc, char** argv)
