@@ -1,4 +1,5 @@
 #include "Encoder.h"
+#include "UdpSocket.h"
 #include <pthread.h>
 #include <sched.h>
 extern "C" {
@@ -31,6 +32,9 @@ public:
 
 void* EncoderPrivate::run(void* arg)
 {
+    Host host("192.168.11.120", 27584);
+    UdpSocket socket;
+
     EncoderPrivate* priv = static_cast<EncoderPrivate*>(arg);
     const int32_t w = priv->width;
     const int32_t h = priv->height;
@@ -48,13 +52,16 @@ void* EncoderPrivate::run(void* arg)
         int i_nals;
         const int frame_size = x264_encoder_encode(priv->encoder, &nals, &i_nals, &priv->pic_in, &priv->pic_out);
         if (frame_size >= 0) {
-            printf("frame %d, size %d\n", frame, frame_size);
+            //printf("frame %d, size %d\n", frame, frame_size);
             ++frame;
 
             for (int i = 0; i < i_nals; ++i) {
                 const int packetSize = nals[i].i_payload;
                 const uint8_t* payload = nals[i].p_payload;
-                printf("nal %d (%d %p)\n", i, packetSize, payload);
+                //printf("nal %d (%d %p)\n", i, packetSize, payload);
+
+                socket.send(host, packetSize);
+                socket.send(host, reinterpret_cast<const char*>(payload), packetSize);
             }
         } else {
             fprintf(stderr, "bad frame!\n");
@@ -85,6 +92,7 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     param.i_height = height;
     param.i_fps_num = 60;
     param.i_fps_den = 1;
+    param.i_slice_max_size = 1400;
 
     // Intra refres:
     param.i_keyint_max = 60;

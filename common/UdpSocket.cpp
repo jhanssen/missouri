@@ -168,6 +168,12 @@ bool UdpSocket::listen(uint16_t port)
     return true;
 }
 
+bool UdpSocket::send(const Host& host, uint32_t data)
+{
+    data = htonl(data);
+    return send(host, reinterpret_cast<char*>(&data), 4);
+}
+
 bool UdpSocket::send(const Host& host, const char* data, int size)
 {
     const uint32_t addr = host.address();

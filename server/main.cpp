@@ -14,11 +14,13 @@ int main(int argc, char** argv)
         return 1;
     }
 
+/*
     UdpSocket server;
     if (!server.listen(21047)) {
         WSACleanup();
         return 1;
     }
+*/
 
     GDICapturer cap;
     const uint8_t* buffer = cap.GetBuffer();
