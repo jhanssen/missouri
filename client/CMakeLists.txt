@@ -25,7 +25,9 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     find_library(VDADECODER_LIBRARY VideoDecodeAcceleration)
     find_library(COREFOUNDATION_LIBRARY CoreFoundation)
     find_library(COREVIDEO_LIBRARY CoreVideo)
-    mark_as_advanced(VDADECODER_LIBRARY)
+    mark_as_advanced(VDADECODER_LIBRARY
+                     COREFOUNDATION_LIBRARY
+                     COREVIDEO_LIBRARY)
     set(EXTRA_LIBS ${VDADECODER_LIBRARY})
     find_path(VDADECODER_INCLUDE_DIR VDADecoder.h)
     if(${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
