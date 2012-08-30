@@ -63,7 +63,7 @@ void* EncoderPrivate::run(void* arg)
 
             for (int i = 0; i < i_nals; ++i) {
                 const int packetSize = nals[i].i_payload - 4; // ### right?
-                const uint8_t* payload = nals[i].p_payload;
+                const uint8_t* payload = nals[i].p_payload + 4;
                 //printf("nal %d (%d %p)\n", i, packetSize, payload);
 
                 socket.send(host, reinterpret_cast<const char*>(payload), packetSize);
