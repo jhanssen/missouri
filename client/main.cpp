@@ -22,15 +22,15 @@ private:
     Receiver receiver;
     Decoder decoder;
 
-    int extrasize;
     char* sps;
     int spss;
     char* pps;
     int ppss;
 };
 
-static inline std::string makeExtraData(int total, char* sps, int spss, char* pps, int ppss)
+static inline std::string makeExtraData(char* sps, int spss, char* pps, int ppss)
 {
+    const int total = (spss + 4 + ppss + 4) * 4 + 100;
     std::string extra(total, '\0');
 
     // skip NAL unit type
@@ -63,7 +63,7 @@ static inline std::string makeExtraData(int total, char* sps, int spss, char* pp
 }
 
 Client::Client()
-    : extrasize(0), sps(0), spss(0), pps(0), ppss(0)
+    : sps(0), spss(0), pps(0), ppss(0)
 {
     stream.setCallback(streamCallback, this);
     control.setCallback(controlCallback, this);
@@ -83,16 +83,6 @@ bool Client::controlCallback(const char* data, int size, void* userData)
 {
     Client* client = reinterpret_cast<Client*>(userData);
     client->receiver.feed(data, size);
-    if (!client->extrasize) {
-        char* ed;
-        int ei;
-        if (!client->receiver.popBlock(&ed, &ei))
-            return true;
-        assert(ei == 4);
-        client->extrasize = *reinterpret_cast<int*>(ed);
-        free(ed);
-        assert(client->extrasize > 0);
-    }
     if (!client->sps) {
         if (!client->receiver.popBlock(&client->sps, &client->spss))
             return true;
@@ -104,7 +94,7 @@ bool Client::controlCallback(const char* data, int size, void* userData)
     assert(client->pps && client->sps);
     assert(client->ppss > 0 && client->spss > 0);
     if (!client->decoder.inited()) {
-        std::string extra = makeExtraData(client->extrasize, client->sps, client->spss, client->pps, client->ppss);
+        std::string extra = makeExtraData(client->sps, client->spss, client->pps, client->ppss);
         client->decoder.init(reinterpret_cast<const uint8_t*>(extra.data()), extra.size());
 
         client->stream.listen(27584);

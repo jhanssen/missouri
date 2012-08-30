@@ -16,12 +16,6 @@ static bool newSocket(TcpSocket* socket, void* userData)
     uint8_t* payload;
     int32_t size;
 
-    int total = enc->headerSize();
-    assert(total > 0);
-    size = 4;
-    socket->send(reinterpret_cast<char*>(&size), 4);
-    socket->send(reinterpret_cast<char*>(&total), 4);
-
     enc->getSps(&payload, &size);
     socket->send(reinterpret_cast<char*>(&size), 4);
     socket->send(reinterpret_cast<char*>(payload), size);
