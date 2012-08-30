@@ -1,6 +1,7 @@
 #include "Decoder.h"
 #include <stdio.h>
 
+#ifdef OS_Darwin
 static void decoderOutputCallback(void* decompressionOutputRefCon,
                                   CFDictionaryRef frameInfo,
                                   OSStatus status,
@@ -8,6 +9,7 @@ static void decoderOutputCallback(void* decompressionOutputRefCon,
                                   CVImageBufferRef imageBuffer)
 {
 }
+#endif
 
 Decoder::Decoder(const uint8_t* extradata, int extrasize)
 {
