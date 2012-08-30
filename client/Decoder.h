@@ -9,8 +9,10 @@
 class Decoder
 {
 public:
-    Decoder(const uint8_t* extradata, int extrasize);
+    Decoder();
     ~Decoder();
+
+    void init(const uint8_t* extradata, int extrasize);
 
     void decode(const char* data, int size);
 

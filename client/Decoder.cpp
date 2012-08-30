@@ -11,7 +11,14 @@ static void decoderOutputCallback(void* decompressionOutputRefCon,
 }
 #endif
 
-Decoder::Decoder(const uint8_t* extradata, int extrasize)
+Decoder::Decoder()
+{
+#ifdef OS_Darwin
+    mDecoder = 0;
+#endif
+}
+
+void Decoder::init(const uint8_t* extradata, int extrasize)
 {
     const int inWidth = 1440;
     const int inHeight = 900;
