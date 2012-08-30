@@ -20,8 +20,10 @@ public:
     x264_t* encoder;
     x264_picture_t pic_in, pic_out;
 
-    x264_nal_t *headers;
-    int i_nal;
+    uint8_t* sps;
+    int spsSize;
+    uint8_t* pps;
+    int ppsSize;
 
     SwsContext* scale;
 
@@ -110,7 +112,6 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
 
     mPriv->encoder = x264_encoder_open(&param);
 
-    x264_encoder_headers(mPriv->encoder, &mPriv->headers, &mPriv->i_nal);
     /*
     p_nal = headers
     int sps_size = p_nal[0].i_payload - 4;
@@ -121,6 +122,17 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     uint8_t *pps = p_nal[1].p_payload + 4;
     uint8_t *sei = p_nal[2].p_payload;
     */
+    x264_nal_t* p_nal;
+    int i_nal;
+    x264_encoder_headers(mPriv->encoder, &p_nal, &i_nal);
+
+    mPriv->spsSize = p_nal[0].i_payload - 4;
+    mPriv->sps = new uint8_t[mPriv->spsSize];
+    memcpy(mPriv->sps, p_nal[0].p_payload + 4, mPriv->spsSize);
+
+    mPriv->ppsSize = p_nal[1].i_payload - 4;
+    mPriv->pps = new uint8_t[mPriv->ppsSize];
+    memcpy(mPriv->pps, p_nal[1].p_payload + 4, mPriv->ppsSize);
 
     x264_picture_alloc(&mPriv->pic_in, X264_CSP_I420, width, height);
 
@@ -138,19 +150,23 @@ Encoder::~Encoder()
     pthread_cond_destroy(&mPriv->encodeCond);
     pthread_cond_destroy(&mPriv->doneCond);
     pthread_mutex_destroy(&mPriv->mutex);
+
+    delete[] mPriv->sps;
+    delete[] mPriv->pps;
+
     delete mPriv;
 }
 
 void Encoder::getSps(uint8_t** payload, int* size)
 {
-    *payload = mPriv->headers[0].p_payload + 4;
-    *size = mPriv->headers[0].i_payload - 4;
+    *payload = mPriv->sps;
+    *size = mPriv->spsSize;
 }
 
 void Encoder::getPps(uint8_t** payload, int* size)
 {
-    *payload = mPriv->headers[1].p_payload + 4;
-    *size = mPriv->headers[1].i_payload - 4;
+    *payload = mPriv->pps;
+    *size = mPriv->ppsSize;
 }
 
 void Encoder::encode()
