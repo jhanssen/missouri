@@ -7,8 +7,6 @@
 
 class UdpSocketPrivate;
 
-typedef bool (*CallbackFunc)(const char*, int, void*);
-
 class UdpSocket
 {
 public:
@@ -18,6 +16,7 @@ public:
     bool listen(uint16_t port);
     bool isListening() const;
 
+    typedef bool (*CallbackFunc)(const char*, int, void*);
     void setCallback(CallbackFunc callback, void* userData);
 
     bool send(const Host& host, const char* data, int size);

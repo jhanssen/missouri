@@ -13,6 +13,7 @@ set(client_SRCS
     Decoder.cpp
     ../common/Host.cpp
     ../common/UdpSocket.cpp
+    ../common/TcpSocket.cpp
 )
 
 set(client_LIBS

@@ -1,4 +1,4 @@
-#include "UdpSocket.h"
+#include "TcpSocket.h"
 #ifdef OS_Windows
 # include <Winsock2.h>
 #else
@@ -23,7 +23,7 @@ static inline int socketError()
 #endif
 }
 
-std::string UdpSocket::socketErrorMessage(int error)
+static inline std::string socketErrorMessage(int error)
 {
 #ifdef OS_Windows
     LPSTR errString = NULL;
@@ -53,26 +53,23 @@ static inline void close(SOCKET socket)
 typedef int SOCKET;
 #endif
 
-class UdpSocketPrivate
+class TcpSocketPrivate
 {
 public:
-    bool listening, stopped;
+    bool connected, stopped;
 
-    SOCKET server;
     SOCKET client;
-
-    sockaddr_in to;
 
     pthread_t thread;
     pthread_mutex_t mutex;
 
-    UdpSocket::CallbackFunc callback;
+    TcpSocket::CallbackFunc callback;
     void* userData;
 
     static void* run(void* arg);
 };
 
-void* UdpSocketPrivate::run(void* arg)
+void* TcpSocketPrivate::run(void* arg)
 {
     sockaddr_in from;
     socklen_t fromlen;
@@ -81,30 +78,36 @@ void* UdpSocketPrivate::run(void* arg)
     fd_set fds;
     char buf[4096];
 
-    UdpSocketPrivate* priv = static_cast<UdpSocketPrivate*>(arg);
+    TcpSocketPrivate* priv = static_cast<TcpSocketPrivate*>(arg);
 
     for (;;) {
         tv.tv_sec = 5;
         tv.tv_usec = 0;
 
         FD_ZERO(&fds);
-        FD_SET(priv->server, &fds);
+        FD_SET(priv->client, &fds);
 
-        ret = select(priv->server + 1, &fds, 0, 0, &tv);
+        ret = select(priv->client + 1, &fds, 0, 0, &tv);
         if (ret == SOCKET_ERROR) {
             const int err = socketError();
-            fprintf(stderr, "socket failed: %d %s\n", err, UdpSocket::socketErrorMessage(err).c_str());
+            fprintf(stderr, "socket failed: %d %s\n", err, socketErrorMessage(err).c_str());
             return 0;
         } else if (ret > 0) {
-            assert(FD_ISSET(priv->server, &fds));
+            assert(FD_ISSET(priv->client, &fds));
             fromlen = sizeof(from);
-            ret = recvfrom(priv->server, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&from), &fromlen);
+            ret = recv(priv->client, buf, sizeof(buf), 0);
+            if (ret == 0) {
+                // connection closed
+#warning remember to handle connection closed here
+                printf("connection closed\n");
+                return 0;
+            }
             printf("got socket data %d\n", ret);
             if (priv->callback && !priv->callback(buf, ret, priv->userData)) {
                 return 0;
             }
         }
-        printf("server wakeup\n");
+        printf("tcp client wakeup\n");
 
         pthread_mutex_lock(&priv->mutex);
         if (priv->stopped) {
@@ -117,97 +120,73 @@ void* UdpSocketPrivate::run(void* arg)
     return 0;
 }
 
-UdpSocket::UdpSocket()
-    : mPriv(new UdpSocketPrivate)
+TcpSocket::TcpSocket()
+    : mPriv(new TcpSocketPrivate)
 {
-    memset(&mPriv->to, 0, sizeof(sockaddr_in));
-    mPriv->listening = false;
     mPriv->stopped = false;
+    mPriv->connected = false;
     mPriv->callback = 0;
 }
 
-UdpSocket::~UdpSocket()
+TcpSocket::~TcpSocket()
 {
-    if (mPriv->listening) {
+    if (mPriv->connected) {
         void* ret;
+
         pthread_mutex_lock(&mPriv->mutex);
         mPriv->stopped = true;
         pthread_mutex_unlock(&mPriv->mutex);
         pthread_join(mPriv->thread, &ret);
         pthread_mutex_destroy(&mPriv->mutex);
 
-        close(mPriv->server);
-    }
-    if (mPriv->to.sin_addr.s_addr) {
         close(mPriv->client);
     }
 
     delete mPriv;
 }
 
-void UdpSocket::setCallback(CallbackFunc callback, void* userData)
+void TcpSocket::setCallback(CallbackFunc callback, void* userData)
 {
     mPriv->callback = callback;
     mPriv->userData = userData;
 }
 
-bool UdpSocket::listen(uint16_t port)
+bool TcpSocket::connect(const Host& host)
 {
-    if (mPriv->listening)
+    if (mPriv->connected)
         return false;
 
     sockaddr_in local;
     local.sin_family = AF_INET;
-    local.sin_addr.s_addr = INADDR_ANY;
-    local.sin_port = htons(port);
-    mPriv->server = socket(AF_INET, SOCK_DGRAM, 0);
-    if (mPriv->server == INVALID_SOCKET) {
+    local.sin_addr.s_addr = host.address();
+    local.sin_port = htons(host.port());
+    mPriv->client = socket(AF_INET, SOCK_STREAM, 0);
+    if (mPriv->client == INVALID_SOCKET) {
         const int err = socketError();
         fprintf(stderr, "socket failed: %d %s\n", err, socketErrorMessage(err).c_str());
         return false;
     }
-    if (bind(mPriv->server, reinterpret_cast<sockaddr*>(&local), sizeof(local))) {
+    if (::connect(mPriv->client, reinterpret_cast<sockaddr*>(&local), sizeof(local))) {
         const int err = socketError();
-        fprintf(stderr, "bind on port %d failed: %d %s\n", port, err, socketErrorMessage(err).c_str());
-        close(mPriv->server);
+        fprintf(stderr, "connect to %u:%u failed: %d %s\n", host.address(), host.port(), err, socketErrorMessage(err).c_str());
+        close(mPriv->client);
         return false;
     }
 
     pthread_mutex_init(&mPriv->mutex, 0);
-    pthread_create(&mPriv->thread, 0, UdpSocketPrivate::run, mPriv);
+    pthread_create(&mPriv->thread, 0, TcpSocketPrivate::run, mPriv);
 
-    mPriv->listening = true;
+    mPriv->connected = true;
 
     return true;
 }
 
-bool UdpSocket::send(const Host& host, const char* data, int size)
+bool TcpSocket::send(const char* data, int size)
 {
-    const uint32_t addr = host.address();
-    const uint16_t port = htons(host.port());
-    sockaddr_in& to = mPriv->to;
-
-    if (to.sin_addr.s_addr != addr || to.sin_port != port) {
-        if (to.sin_addr.s_addr)
-            close(mPriv->client);
-        to.sin_family = AF_INET;
-        to.sin_addr.s_addr = addr;
-        to.sin_port = port;
-        mPriv->client = socket(AF_INET, SOCK_DGRAM, 0);
-        if (mPriv->client == INVALID_SOCKET) {
-            memset(&to, 0, sizeof(sockaddr_in));
-
-            const int err = socketError();
-            fprintf(stderr, "socket failed in send: %d %s\n", err, socketErrorMessage(err).c_str());
-
-            return false;
-        }
-    }
-
     int err;
     ssize_t total = 0, sent;
     do {
-        sent = sendto(mPriv->client, &data[total], size - total, 0, reinterpret_cast<sockaddr*>(&to), sizeof(sockaddr_in));
+        sent = ::send(mPriv->client, &data[total], size - total, 0);
         if (sent == SOCKET_ERROR) {
             const int err = socketError();
             if (err == EINTR)
@@ -215,7 +194,6 @@ bool UdpSocket::send(const Host& host, const char* data, int size)
             fprintf(stderr, "sendto failed in send: %d %s\n", err, socketErrorMessage(err).c_str());
 
             close(mPriv->client);
-            memset(&to, 0, sizeof(sockaddr_in));
             return false;
         }
         total += sent;
@@ -225,7 +203,14 @@ bool UdpSocket::send(const Host& host, const char* data, int size)
     return true;
 }
 
-bool UdpSocket::isListening() const
+bool TcpSocket::isConnected() const
 {
-    return mPriv->listening;
+    return mPriv->connected;
+}
+
+void TcpSocket::setSocketDescriptor(void* socket)
+{
+    if (mPriv->connected)
+        return;
+    mPriv->client = reinterpret_cast<SOCKET>(socket);
 }
