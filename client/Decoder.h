@@ -13,10 +13,12 @@ public:
     ~Decoder();
 
     void init(const uint8_t* extradata, int extrasize);
+    bool inited() const { return mInited; }
 
     void decode(const char* data, int size);
 
 private:
+    bool mInited;
 #ifdef OS_Darwin
     VDADecoder *mDecoder;
 #endif

@@ -17,11 +17,13 @@ static bool streamCallback(const char* data, int size, void* userData)
 static bool dataCallback(const char* data, int size, void* userData)
 {
     Decoder* decoder = reinterpret_cast<Decoder*>(userData);
-    decoder->init(0, 0);
+    if (!decoder->inited()) {
+        decoder->init(0, 0);
 
-    stream = new UdpSocket;
-    stream->setCallback(streamCallback, &decoder);
-    stream->listen(27584);
+        stream = new UdpSocket;
+        stream->setCallback(streamCallback, &decoder);
+        stream->listen(27584);
+    }
 
     return true;
 }

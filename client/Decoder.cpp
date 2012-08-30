@@ -13,6 +13,7 @@ static void decoderOutputCallback(void* decompressionOutputRefCon,
 
 Decoder::Decoder()
 {
+    mInited = false;
 #ifdef OS_Darwin
     mDecoder = 0;
 #endif
