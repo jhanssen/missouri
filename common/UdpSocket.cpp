@@ -66,6 +66,9 @@ public:
     pthread_t thread;
     pthread_mutex_t mutex;
 
+    CallbackFunc callback;
+    void* userData;
+
     static void* run(void* arg);
 };
 
@@ -97,6 +100,9 @@ void* UdpSocketPrivate::run(void* arg)
             fromlen = sizeof(from);
             ret = recvfrom(priv->server, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&from), &fromlen);
             printf("got socket data %d\n", ret);
+            if (priv->callback && !priv->callback(buf, ret, priv->userData)) {
+                return 0;
+            }
         }
         printf("server wakeup\n");
 
@@ -117,6 +123,7 @@ UdpSocket::UdpSocket()
     memset(&mPriv->to, 0, sizeof(sockaddr_in));
     mPriv->listening = false;
     mPriv->stopped = false;
+    mPriv->callback = 0;
 }
 
 UdpSocket::~UdpSocket()
@@ -136,6 +143,12 @@ UdpSocket::~UdpSocket()
     }
 
     delete mPriv;
+}
+
+void UdpSocket::setCallback(CallbackFunc callback, void* userData)
+{
+    mPriv->callback = callback;
+    mPriv->userData = userData;
 }
 
 bool UdpSocket::listen(uint16_t port)
