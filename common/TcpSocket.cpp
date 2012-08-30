@@ -207,7 +207,7 @@ bool TcpSocket::send(const char* data, int size)
         }
         total += sent;
     } while (total < size);
-	printf("TcpSocket sent %d\n", total);
+        printf("TcpSocket sent %d\n", total);
 
     assert(total == size);
     return true;
