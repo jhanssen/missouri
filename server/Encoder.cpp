@@ -106,9 +106,6 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     param.rc.f_rf_constant = 25;
     param.rc.f_rf_constant_max = 35;
 
-    // For streaming:
-    param.b_repeat_headers = 1;
-    param.b_annexb = 1;
     x264_param_apply_profile(&param, "baseline");
 
     mPriv->encoder = x264_encoder_open(&param);
