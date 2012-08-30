@@ -1,50 +1,127 @@
 #include "UdpSocket.h"
 #include "Decoder.h"
 #include "TcpSocket.h"
+#include "Receiver.h"
 #include <unistd.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <assert.h>
 
-static UdpSocket* stream = 0;
-
-static bool streamCallback(const char* data, int size, void* userData)
+class Client
 {
-    Decoder* decoder = reinterpret_cast<Decoder*>(userData);
-    decoder->decode(data, size);
+public:
+    Client();
+
+private:
+    static bool streamCallback(const char* data, int size, void* userData);
+    static bool controlCallback(const char* data, int size, void* userData);
+
+private:
+    TcpSocket control;
+    UdpSocket stream;
+    Receiver receiver;
+    Decoder decoder;
+
+    int extrasize;
+    char* sps;
+    int spss;
+    char* pps;
+    int ppss;
+};
+
+static inline std::string makeExtraData(int total, char* sps, int spss, char* pps, int ppss)
+{
+    std::string extra(total, '\0');
+
+    // skip NAL unit type
+    ++sps;
+    extra[0] = 0x1;
+    extra[1] = sps[0];
+    extra[2] = sps[1];
+    extra[3] = sps[2];
+    extra[4] = 0xfc | (4 - 1);
+
+    int sz = 5;
+    uint16_t num;
+
+    extra[sz++] = 0xe0 | 1;
+
+    memcpy(&extra[sz + 2], sps, spss);
+    num = htons(spss);
+    memcpy(&extra[sz], &num, sizeof(uint16_t));
+    sz += spss + 2;
+
+    extra[sz++] = 1;
+
+    memcpy(&extra[sz + 2], pps, ppss);
+    num = htons(ppss);
+    memcpy(&extra[sz], &num, sizeof(uint16_t));
+    sz += ppss + 2;
+
+    extra.resize(sz);
+    return extra;
+}
+
+Client::Client()
+    : extrasize(0), sps(0), spss(0), pps(0), ppss(0)
+{
+    stream.setCallback(streamCallback, this);
+    control.setCallback(controlCallback, this);
+    if (!control.connect(Host("192.168.11.14", 21047))) {
+        fprintf(stderr, "Unable to connect to server\n");
+    }
+}
+
+bool Client::streamCallback(const char* data, int size, void* userData)
+{
+    Client* client = reinterpret_cast<Client*>(userData);
+    client->decoder.decode(data, size);
     return true;
 }
 
-static bool dataCallback(const char* data, int size, void* userData)
+bool Client::controlCallback(const char* data, int size, void* userData)
 {
-    Decoder* decoder = reinterpret_cast<Decoder*>(userData);
-    if (!decoder->inited()) {
-        decoder->init(0, 0);
-
-        stream = new UdpSocket;
-        stream->setCallback(streamCallback, &decoder);
-        stream->listen(27584);
+    Client* client = reinterpret_cast<Client*>(userData);
+    client->receiver.feed(data, size);
+    if (!client->extrasize) {
+        char* ed;
+        int ei;
+        if (!client->receiver.popBlock(&ed, &ei))
+            return true;
+        assert(ei == 4);
+        client->extrasize = *reinterpret_cast<int*>(ed);
+        free(ed);
+        assert(client->extrasize > 0);
     }
+    if (!client->sps) {
+        if (!client->receiver.popBlock(&client->sps, &client->spss))
+            return true;
+    }
+    if (!client->pps) {
+        if (!client->receiver.popBlock(&client->pps, &client->ppss))
+            return true;
+    }
+    assert(client->pps && client->sps);
+    assert(client->ppss > 0 && client->spss > 0);
+    if (!client->decoder.inited()) {
+        std::string extra = makeExtraData(client->extrasize, client->sps, client->spss, client->pps, client->ppss);
+        client->decoder.init(reinterpret_cast<const uint8_t*>(extra.data()), extra.size());
+
+        client->stream.listen(27584);
+    }
+    free(client->pps);
+    free(client->sps);
 
     return true;
 }
 
 int main(int argc, char** argv)
 {
-    Decoder decoder;
-
-    TcpSocket socket;
-    socket.setCallback(dataCallback, &decoder);
-    if (!socket.connect(Host("192.168.11.14", 21047))) {
-        fprintf(stderr, "Unable to connect to server\n");
-        return 1;
-    }
+    Client client;
 
     for (;;) {
         usleep(1000000);
     }
-
-#warning mutex protect this
-    delete stream;
 
     return 0;
 }

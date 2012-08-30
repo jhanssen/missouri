@@ -180,6 +180,11 @@ void Encoder::getPps(uint8_t** payload, int* size)
     *size = mPriv->ppsSize;
 }
 
+int Encoder::headerSize() const
+{
+    return mPriv->headerSize;
+}
+
 void Encoder::encode()
 {
     pthread_mutex_lock(&mPriv->mutex);

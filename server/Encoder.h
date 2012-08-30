@@ -18,6 +18,7 @@ public:
 
     void getSps(uint8_t** payload, int* size);
     void getPps(uint8_t** payload, int* size);
+    int headerSize() const;
 
 private:
     EncoderPrivate* mPriv;
