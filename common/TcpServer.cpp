@@ -111,7 +111,7 @@ void* TcpServerPrivate::run(void* arg)
                 }
                 printf("TcpServer got new socket connection\n");
                 TcpSocket* socket = new TcpSocket;
-                socket->setSocketDescriptor(reinterpret_cast<void*>(sock));
+                socket->setSocketDescriptor(reinterpret_cast<void*>(&sock));
                 if (priv->callback && !priv->callback(socket, priv->userData)) {
                     return 0;
                 }

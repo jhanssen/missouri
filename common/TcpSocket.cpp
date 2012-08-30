@@ -207,7 +207,7 @@ bool TcpSocket::send(const char* data, int size)
         }
         total += sent;
     } while (total < size);
-        printf("TcpSocket sent %d\n", total);
+        printf("TcpSocket sent %ld\n", total);
 
     assert(total == size);
     return true;
@@ -222,7 +222,7 @@ void TcpSocket::setSocketDescriptor(void* socket)
 {
     if (mPriv->connected)
         return;
-    mPriv->client = reinterpret_cast<SOCKET>(socket);
+    mPriv->client = *reinterpret_cast<SOCKET*>(socket);
 
     pthread_mutex_init(&mPriv->mutex, 0);
     pthread_create(&mPriv->thread, 0, TcpSocketPrivate::run, mPriv);
