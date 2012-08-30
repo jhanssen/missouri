@@ -4,7 +4,9 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 add_definitions(-DOS_${CMAKE_SYSTEM_NAME})
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+if(NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+endif()
 
 set(client_SRCS
     main.cpp
@@ -18,6 +20,10 @@ set(client_LIBS
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     list(APPEND client_LIBS -lws2_32)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    if(${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+    endif()
 endif()
 
 include_directories(${CMAKE_CURRENT_LIST_DIR})

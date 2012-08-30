@@ -4,9 +4,11 @@
 #else
 # include <sys/types.h>
 # include <sys/socket.h>
+# include <sys/select.h>
 # include <netinet/in.h>
 # include <string.h>
 # include <errno.h>
+# include <unistd.h>
 #endif
 #include <string>
 #include <pthread.h>
@@ -179,6 +181,8 @@ bool UdpSocket::listen(uint16_t port)
     pthread_create(&mPriv->thread, 0, UdpSocketPrivate::run, mPriv);
 
     mPriv->listening = true;
+
+    return true;
 }
 
 bool UdpSocket::send(const Host& host, const char* data, int size)
