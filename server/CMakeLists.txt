@@ -17,6 +17,7 @@ set(server_SRCS
     main.cpp
     GDICapturer.cpp
     Encoder.cpp
+    ../common/Host.cpp
     ../common/UdpSocket.cpp
 )
 

@@ -1,5 +1,10 @@
 #include "Host.h"
 #ifdef OS_Windows
+# include <Winsock2.h>
+// Silly Windows, the following is required to get getaddrinfo/freeaddrinfo apparently
+# undef _WIN32_WINNT
+# define _WIN32_WINNT 0x0501
+# include <Ws2TcpIp.h>
 #else
 # include <sys/types.h>
 # include <sys/socket.h>
@@ -8,12 +13,11 @@
 #endif
 #include <assert.h>
 #include <string.h>
+#include <stdio.h>
 
 Host::Host(const std::string& address, uint16_t port)
     : mData(0)
 {
-#ifdef OS_Windows
-#else
     addrinfo hints;
     addrinfo* result;
 
@@ -35,6 +39,5 @@ Host::Host(const std::string& address, uint16_t port)
 
     freeaddrinfo(result);
 
-#endif
     mData |= (static_cast<uint64_t>(port) << 48);
 }

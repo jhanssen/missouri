@@ -1,13 +1,24 @@
-#include "Windows.h"
 #include "GDICapturer.h"
 #include "Encoder.h"
 #include "UdpSocket.h"
+#include <Windows.h>
+#include <Winsock2.h>
+#include <stdio.h>
 
 int main(int argc, char** argv)
 {
-    UdpSocket server(21047);
-    if (!server.isListening())
+    WSADATA data;
+    const int ret = WSAStartup(0x0202, &data);
+    if (ret) {
+        fprintf(stderr, "WSAStartup failed: %d %s\n", ret, UdpSocket::socketErrorMessage(ret).c_str());
         return 1;
+    }
+
+    UdpSocket server;
+    if (!server.listen(21047)) {
+        WSACleanup();
+        return 1;
+    }
 
     GDICapturer cap;
     const uint8_t* buffer = cap.GetBuffer();
@@ -21,4 +32,7 @@ int main(int argc, char** argv)
         enc.encode();
         Sleep(sleepFor);
     }
+
+    WSACleanup();
+    return 0;
 }

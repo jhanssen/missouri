@@ -2,6 +2,7 @@
 #define UDPSOCKET_H
 
 #include <cstdint>
+#include <string>
 #include "Host.h"
 
 class UdpSocketPrivate;
@@ -16,6 +17,8 @@ public:
     bool isListening() const;
 
     bool send(const Host& host, const char* data, int size);
+
+    static std::string socketErrorMessage(int error);
 
 private:
     UdpSocketPrivate* mPriv;

@@ -10,12 +10,20 @@
 # include <errno.h>
 # include <unistd.h>
 #endif
-#include <string>
 #include <pthread.h>
 #include <stdio.h>
 #include <assert.h>
 
-static inline std::string socketErrorMessage(int error)
+static inline int socketError()
+{
+#ifdef OS_Windows
+    return WSAGetLastError();
+#else
+    return errno;
+#endif
+}
+
+std::string UdpSocket::socketErrorMessage(int error)
 {
 #ifdef OS_Windows
     LPSTR errString = NULL;
@@ -31,16 +39,14 @@ static inline std::string socketErrorMessage(int error)
 #endif
 }
 
-static inline int socketError()
-{
 #ifdef OS_Windows
-    return WSAGetLastError();
-#else
-    return errno;
-#endif
-}
+typedef int socklen_t;
 
-#ifndef OS_Windows
+static inline void close(SOCKET socket)
+{
+    closesocket(socket);
+}
+#else
 #define SOCKET_ERROR -1
 #define INVALID_SOCKET -1
 
@@ -84,7 +90,7 @@ void* UdpSocketPrivate::run(void* arg)
         ret = select(priv->server + 1, &fds, 0, 0, &tv);
         if (ret == SOCKET_ERROR) {
             const int err = socketError();
-            fprintf(stderr, "socket failed: %d %s\n", err, socketErrorMessage(err).c_str());
+            fprintf(stderr, "socket failed: %d %s\n", err, UdpSocket::socketErrorMessage(err).c_str());
             return 0;
         } else if (ret > 0) {
             assert(FD_ISSET(priv->server, &fds));
@@ -123,13 +129,7 @@ UdpSocket::~UdpSocket()
         pthread_join(mPriv->thread, &ret);
         pthread_mutex_destroy(&mPriv->mutex);
 
-#ifdef OS_Windows
-        closesocket(mPriv->server);
-
-        WSACleanup();
-#else
         close(mPriv->server);
-#endif
     }
     if (mPriv->to.sin_addr.s_addr) {
         close(mPriv->client);
@@ -143,15 +143,6 @@ bool UdpSocket::listen(uint16_t port)
     if (mPriv->listening)
         return false;
 
-#ifdef OS_Windows
-    WSADATA data;
-    const int ret = WSAStartup(0x0202, &data);
-    if (ret) {
-        fprintf(stderr, "WSAStartup failed: %d %s\n", ret, socketErrorMessage(ret).c_str());
-        return false;
-    }
-#endif
-
     sockaddr_in local;
     local.sin_family = AF_INET;
     local.sin_addr.s_addr = INADDR_ANY;
@@ -160,20 +151,12 @@ bool UdpSocket::listen(uint16_t port)
     if (mPriv->server == INVALID_SOCKET) {
         const int err = socketError();
         fprintf(stderr, "socket failed: %d %s\n", err, socketErrorMessage(err).c_str());
-#ifdef OS_Windows
-        WSACleanup();
-#endif
         return false;
     }
     if (bind(mPriv->server, reinterpret_cast<sockaddr*>(&local), sizeof(local))) {
         const int err = socketError();
         fprintf(stderr, "bind on port %d failed: %d %s\n", port, err, socketErrorMessage(err).c_str());
-#ifdef OS_Windows
-        closesocket(mPriv->server);
-        WSACleanup();
-#else
         close(mPriv->server);
-#endif
         return false;
     }
 
