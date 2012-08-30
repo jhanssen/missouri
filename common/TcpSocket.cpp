@@ -92,13 +92,25 @@ void* TcpSocketPrivate::run(void* arg)
             return 0;
         } else if (ret > 0) {
             assert(FD_ISSET(priv->client, &fds));
-            ret = recv(priv->client, buf, sizeof(buf), 0);
-            if (ret == 0) {
-                // connection closed
+            bool done;
+            do {
+                done = true;
+                ret = recv(priv->client, buf, sizeof(buf), 0);
+                if (ret == 0) {
+                    // connection closed
 #warning remember to handle connection closed here
-                printf("TcpSocket connection closed\n");
-                return 0;
-            }
+                    printf("TcpSocket connection closed\n");
+                    return 0;
+                } else if (ret == SOCKET_ERROR) {
+                    const int err = socketError();
+                    if (err == EINTR)
+                        done = false;
+                    else {
+                        fprintf(stderr, "TcpSocket recv error: %d %s\n", err, socketErrorMessage(err).c_str());
+                        return 0;
+                    }
+                }
+            } while (!done);
             printf("TcpSocket got socket data %d\n", ret);
             if (priv->callback && !priv->callback(buf, ret, priv->userData)) {
                 return 0;

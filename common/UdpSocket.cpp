@@ -97,12 +97,25 @@ void* UdpSocketPrivate::run(void* arg)
             return 0;
         } else if (ret > 0) {
             assert(FD_ISSET(priv->server, &fds));
-            fromlen = sizeof(from);
-            ret = recvfrom(priv->server, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&from), &fromlen);
-            printf("got socket data %d\n", ret);
-            if (priv->callback && !priv->callback(buf, ret, priv->userData)) {
-                return 0;
-            }
+            bool done;
+            do {
+                done = true;
+                fromlen = sizeof(from);
+                ret = recvfrom(priv->server, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&from), &fromlen);
+                if (ret == SOCKET_ERROR) {
+                    const int err = socketError();
+                    if (err == EINTR)
+                        done = false;
+                    else {
+                        fprintf(stderr, "socket recvfrom failed: %d %s\n", err, UdpSocket::socketErrorMessage(err).c_str());
+                        return 0;
+                    }
+                }
+                printf("got socket data %d\n", ret);
+                if (priv->callback && !priv->callback(buf, ret, priv->userData)) {
+                    return 0;
+                }
+            } while (!done);
         }
         printf("server wakeup\n");
 
