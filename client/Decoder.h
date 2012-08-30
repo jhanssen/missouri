@@ -20,7 +20,7 @@ public:
 private:
     bool mInited;
 #ifdef OS_Darwin
-    VDADecoder *mDecoder;
+    VDADecoder mDecoder;
 #endif
 };
 

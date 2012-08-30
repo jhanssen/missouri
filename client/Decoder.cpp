@@ -8,15 +8,13 @@ static void decoderOutputCallback(void* decompressionOutputRefCon,
                                   uint32_t infoFlags,
                                   CVImageBufferRef imageBuffer)
 {
+    printf("got decoded frame\n");
 }
 #endif
 
 Decoder::Decoder()
 {
     mInited = false;
-#ifdef OS_Darwin
-    mDecoder = 0;
-#endif
 }
 
 void Decoder::init(const uint8_t* extradata, int extrasize)
@@ -83,11 +81,10 @@ void Decoder::init(const uint8_t* extradata, int extrasize)
                               destinationImageBufferAttributes,
                               (VDADecoderOutputCallback*)decoderOutputCallback,
                               this,
-                              mDecoder);
+                              &mDecoder);
 
     if (kVDADecoderNoErr != status) {
         fprintf(stderr, "VDADecoderCreate failed. err: %d\n", status);
-        mDecoder = 0;
     }
 
     if (decoderConfiguration) CFRelease(decoderConfiguration);
@@ -102,7 +99,45 @@ Decoder::~Decoder()
 {
 }
 
+#ifdef OS_Darwin
+static inline CFDictionaryRef MakeDictionaryWithDisplayTime(int64_t inFrameDisplayTime)
+{
+    CFStringRef key = CFSTR("FrameDisplayTime");
+    CFNumberRef value = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt64Type, &inFrameDisplayTime);
+
+    return CFDictionaryCreate(kCFAllocatorDefault,
+                              (const void **)&key,
+                              (const void **)&value,
+                              1,
+                              &kCFTypeDictionaryKeyCallBacks,
+                              &kCFTypeDictionaryValueCallBacks);
+}
+#endif
+
 void Decoder::decode(const char* data, int size)
 {
     printf("decoding %d\n", size);
+#ifdef OS_Darwin
+    CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, reinterpret_cast<const UInt8*>(data), size);
+
+    CFDictionaryRef frameInfo = NULL;
+    OSStatus status = kVDADecoderNoErr;
+
+    // create a dictionary containg some information about the frame being decoded
+    // in this case, we pass in the display time aquired from the stream
+    frameInfo = MakeDictionaryWithDisplayTime(0 /*inFrameDisplayTime*/);
+
+    // ask the hardware to decode our frame, frameInfo will be retained and pased back to us
+    // in the output callback for this frame
+    status = VDADecoderDecode(mDecoder, 0, frameData, frameInfo);
+    if (kVDADecoderNoErr != status) {
+        fprintf(stderr, "VDADecoderDecode failed. err: %d\n", status);
+    }
+
+    // the dictionary passed into decode is retained by the framework so
+    // make sure to release it here
+    CFRelease(frameInfo);
+
+    CFRelease(frameData);
+#endif
 }
