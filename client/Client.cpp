@@ -74,12 +74,14 @@ bool Client::controlCallback(const char* data, int size, void* userData)
     if (!client->decoder.inited()) {
         std::string extra = makeExtraData(reinterpret_cast<uint8_t*>(client->sps), client->spss,
                                           reinterpret_cast<uint8_t*>(client->pps), client->ppss);
-        client->decoder.init(reinterpret_cast<const uint8_t*>(extra.data()), extra.size());
+        client->decoder.init(reinterpret_cast<const uint8_t*>(extra.data()), extra.size(),
+                             reinterpret_cast<uint8_t*>(client->sps), client->spss,
+                             reinterpret_cast<uint8_t*>(client->pps), client->ppss);
 
         client->stream.listen(27584);
     }
-    free(client->pps);
-    free(client->sps);
+    //free(client->pps);
+    //free(client->sps);
 
     return true;
 }

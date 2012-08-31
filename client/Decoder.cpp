@@ -17,11 +17,36 @@ Decoder::Decoder()
 {
 }
 
-void Decoder::init(const uint8_t* extradata, int extrasize)
+void Decoder::init(const uint8_t* extradata, int extrasize,
+                   const uint8_t* sps, int spsSize,
+                   const uint8_t* pps, int ppsSize)
 {
     if (mInited)
         return;
     mInited = true;
+
+    mHeader = reinterpret_cast<uint8_t*>(malloc(spsSize + 4 + ppsSize + 4 + 4));
+    int sz = 0;
+    mHeader[sz++] = 0x0;
+    mHeader[sz++] = 0x0;
+    mHeader[sz++] = 0x0;
+    mHeader[sz++] = 0x1;
+    memcpy(mHeader + sz, sps, spsSize);
+    sz += spsSize;
+
+    mHeader[sz++] = 0x0;
+    mHeader[sz++] = 0x0;
+    mHeader[sz++] = 0x0;
+    mHeader[sz++] = 0x1;
+    memcpy(mHeader + sz, pps, ppsSize);
+    sz += ppsSize;
+
+    mHeader[sz++] = 0x0;
+    mHeader[sz++] = 0x0;
+    mHeader[sz++] = 0x0;
+    mHeader[sz++] = 0x1;
+
+    mHeaderSize = sz;
 
     const int inWidth = 1440;
     const int inHeight = 900;
@@ -145,6 +170,8 @@ void Decoder::decode(const char* data, int size)
                 return;
             // we have a full frame, onwards!
         } else {
+            if (mDatas.empty()) // ignore frames where no start frame has been found
+                return;
             char* buf = reinterpret_cast<char*>(malloc(size - 2));
             memcpy(buf, data + 2, size - 2);
             Buffer buffer = { buf, size - 2 };
@@ -153,7 +180,19 @@ void Decoder::decode(const char* data, int size)
             if (!end_bit)
                 return;
         }
+    } else {
+        return;
+        // assume full frame
+        assert(!mTotal && mDatas.empty());
+        char* buf = reinterpret_cast<char*>(malloc(size));
+        memcpy(buf, data, size);
+        Buffer buffer = { buf, size };
+        mDatas.push_back(buffer);
+        mTotal = size;
     }
+
+    if (mDatas.empty())
+        return;
 
     assert(mDatas.size() > 0 && end_bit);
 
@@ -179,6 +218,15 @@ void Decoder::decode(const char* data, int size)
         mDatas.clear();
         mTotal = 0;
     }
+
+    char* realframe = reinterpret_cast<char*>(malloc(frameSize + mHeaderSize));
+    memcpy(realframe, mHeader, mHeaderSize);
+    memcpy(realframe + mHeaderSize, frame, frameSize);
+
+    free(frame);
+
+    frame = realframe;
+    frameSize += mHeaderSize;
 
     //const char* frame = data;
     //const int frameSize = size;

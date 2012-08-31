@@ -13,13 +13,17 @@ public:
     Decoder();
     ~Decoder();
 
-    void init(const uint8_t* extradata, int extrasize);
+    void init(const uint8_t* extradata, int extrasize,
+              const uint8_t* sps, int spsSize,
+              const uint8_t* pps, int ppsSize);
     bool inited() const { return mInited; }
 
     void decode(const char* data, int size);
 
 private:
     bool mInited;
+    uint8_t* mHeader;
+    int mHeaderSize;
     struct Buffer {
         char* data;
         int size;
