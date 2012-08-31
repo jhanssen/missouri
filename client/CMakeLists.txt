@@ -11,6 +11,7 @@ endif()
 set(client_SRCS
     main.cpp
     Decoder.cpp
+    IOSurfaceTestView.m
     ../common/Host.cpp
     ../common/UdpSocket.cpp
     ../common/TcpSocket.cpp
@@ -25,6 +26,10 @@ set(client_LIBS
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     list(APPEND client_LIBS -lws2_32)
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    find_library(FOUNDATION_LIBRARY Foundation)
+    find_library(APPKIT_LIBRARY AppKit)
+    find_library(OPENGL_LIBRARY OpenGL)
+    find_library(IOSURFACE_LIBRARY IOSurface)
     find_library(VDADECODER_LIBRARY VideoDecodeAcceleration)
     find_library(COREFOUNDATION_LIBRARY CoreFoundation)
     find_library(COREVIDEO_LIBRARY CoreVideo)
@@ -40,4 +45,4 @@ endif()
 
 include_directories(${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/../common ${VDADECODER_INCLUDE_DIR})
 add_executable(client ${client_SRCS})
-target_link_libraries(client ${client_LIBS} ${VDADECODER_LIBRARY} ${COREFOUNDATION_LIBRARY} ${COREVIDEO_LIBRARY})
+target_link_libraries(client ${client_LIBS} ${FOUNDATION_LIBRARY} ${APPKIT_LIBRARY} ${OPENGL_LIBRARY} ${IOSURFACE_LIBRARY} ${VDADECODER_LIBRARY} ${COREFOUNDATION_LIBRARY} ${COREVIDEO_LIBRARY})
