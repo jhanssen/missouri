@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <algorithm>
 
 Receiver::Receiver()
 {
@@ -49,16 +50,16 @@ void Receiver::feed(const char* data, int size)
             }
         }
         if (size > 0 && mCurrent.size) { // we have some data
-            const int diff = size - mCurrentSize;
+            const int diff = std::min(mCurrent.size - mCurrentSize, size);
             assert(diff <= size);
             memcpy(mCurrent.data + mCurrentSize, data, diff);
-            if (mCurrentSize + size >= mCurrent.size) { // we have the entire data
+            if (mCurrentSize + diff >= mCurrent.size) { // we have the entire data
                 mCurrentSize = 0;
                 mBlocks.push_back(mCurrent);
                 mCurrent.size = 0;
                 mCurrent.data = static_cast<char*>(malloc(4));
             } else { // we don't have the entire data
-                mCurrentSize += size;
+                mCurrentSize += diff;
             }
             data += diff;
             size -= diff;
