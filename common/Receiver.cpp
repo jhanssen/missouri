@@ -28,7 +28,7 @@ void Receiver::feed(const char* data, int size)
         if (!mCurrent.size) { // we don't yet know the total size for this block
             if (mCurrentSize + size >= 4) { // we have a complete size
                 if (!mCurrentSize) { // optimize for the common case
-                    mCurrent.size = htonl(*reinterpret_cast<const int*>(data));
+                    mCurrent.size = ntohl(*reinterpret_cast<const int*>(data));
                     mCurrent.data = static_cast<char*>(realloc(mCurrent.data, mCurrent.size));
                     data += 4;
                     size -= 4;
@@ -38,7 +38,7 @@ void Receiver::feed(const char* data, int size)
                     assert(diff <= size);
                     memcpy(mCurrent.data + mCurrentSize, data, diff);
                     mCurrentSize = 0;
-                    mCurrent.size = htonl(*reinterpret_cast<const int*>(mCurrent.data));
+                    mCurrent.size = ntohl(*reinterpret_cast<const int*>(mCurrent.data));
                     mCurrent.data = static_cast<char*>(realloc(mCurrent.data, mCurrent.size));
                     data += diff;
                     size -= diff;
@@ -52,8 +52,6 @@ void Receiver::feed(const char* data, int size)
             const int diff = size - mCurrentSize;
             assert(diff <= size);
             memcpy(mCurrent.data + mCurrentSize, data, diff);
-            data += diff;
-            size -= diff;
             if (mCurrentSize + size >= mCurrent.size) { // we have the entire data
                 mCurrentSize = 0;
                 mBlocks.push_back(mCurrent);
@@ -62,6 +60,8 @@ void Receiver::feed(const char* data, int size)
             } else { // we don't have the entire data
                 mCurrentSize += size;
             }
+            data += diff;
+            size -= diff;
         }
     } while (size);
 }
