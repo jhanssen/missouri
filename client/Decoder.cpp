@@ -284,6 +284,8 @@ void Decoder::decode(const char* data, int size)
     if (ok >= 0)
         av_free_packet(&packet);
 
+#warning update mPriv->frame wrt framePos? if not, it needs to be freed
+
     return;
 
 #ifdef OS_Darwin
