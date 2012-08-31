@@ -1,44 +1,17 @@
-#include "UdpSocket.h"
-#include "Decoder.h"
-#include "TcpSocket.h"
-#include "Receiver.h"
-#include <unistd.h>
+#include "Client.h"
+#include <string>
 #include <stdio.h>
-#include <pthread.h>
-#include <assert.h>
 
-class Client
-{
-public:
-    Client();
-
-private:
-    static bool streamCallback(const char* data, int size, void* userData);
-    static bool controlCallback(const char* data, int size, void* userData);
-
-private:
-    TcpSocket control;
-    UdpSocket stream;
-    Receiver receiver;
-    Decoder decoder;
-
-    char* sps;
-    int spss;
-    char* pps;
-    int ppss;
-};
-
-static inline std::string makeExtraData(char* sps, int spss, char* pps, int ppss)
+static inline std::string makeExtraData(unsigned char* sps, int spss, unsigned char* pps, int ppss)
 {
     const int total = (spss + 4 + ppss + 4) * 4 + 100;
     std::string extra(total, '\0');
 
     // skip NAL unit type
-    ++sps;
     extra[0] = 0x1;
-    extra[1] = sps[0];
-    extra[2] = sps[1];
-    extra[3] = sps[2];
+    extra[1] = sps[1];
+    extra[2] = sps[2];
+    extra[3] = sps[3];
     extra[4] = 0xfc | (4 - 1);
 
     int sz = 5;
@@ -82,19 +55,25 @@ bool Client::streamCallback(const char* data, int size, void* userData)
 bool Client::controlCallback(const char* data, int size, void* userData)
 {
     Client* client = reinterpret_cast<Client*>(userData);
+    printf("feeding %d bytes\n", size);
     client->receiver.feed(data, size);
     if (!client->sps) {
+        printf("testing sps\n");
         if (!client->receiver.popBlock(&client->sps, &client->spss))
             return true;
+        printf("got sps of size %d\n", client->spss);
     }
     if (!client->pps) {
+        printf("testing pps\n");
         if (!client->receiver.popBlock(&client->pps, &client->ppss))
             return true;
+        printf("got pps of size %d\n", client->ppss);
     }
     assert(client->pps && client->sps);
     assert(client->ppss > 0 && client->spss > 0);
     if (!client->decoder.inited()) {
-        std::string extra = makeExtraData(client->sps, client->spss, client->pps, client->ppss);
+        std::string extra = makeExtraData(reinterpret_cast<uint8_t*>(client->sps), client->spss,
+                                          reinterpret_cast<uint8_t*>(client->pps), client->ppss);
         client->decoder.init(reinterpret_cast<const uint8_t*>(extra.data()), extra.size());
 
         client->stream.listen(27584);
@@ -103,15 +82,4 @@ bool Client::controlCallback(const char* data, int size, void* userData)
     free(client->sps);
 
     return true;
-}
-
-int main(int argc, char** argv)
-{
-    Client client;
-
-    for (;;) {
-        usleep(1000000);
-    }
-
-    return 0;
 }

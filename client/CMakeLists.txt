@@ -9,7 +9,8 @@ if(NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
 endif()
 
 set(client_SRCS
-    main.cpp
+    main.mm
+    Client.cpp
     Decoder.cpp
     IOSurfaceTestView.m
     ../common/Host.cpp
