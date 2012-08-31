@@ -119,10 +119,10 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     // Rate control:
     param.rc.i_rc_method = X264_RC_ABR;
     param.rc.i_bitrate = 400000;
+*/
 
+    //param.b_annexb = 1;
     param.b_repeat_headers = 1;
-    param.b_annexb = 1;
-    */
     param.i_threads = 3;
     param.i_width = 1440;
     param.i_height = 900;

@@ -1,5 +1,51 @@
 #include "Decoder.h"
 #include <stdio.h>
+#include <assert.h>
+#include <deque>
+#ifdef OS_Darwin
+# include <VDADecoder.h>
+#endif
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavformat/avio.h>
+}
+
+class DecoderPrivate
+{
+public:
+    bool inited;
+    uint8_t* header;
+    int headerSize;
+    struct Buffer {
+        uint8_t* data;
+        int size;
+    };
+    std::deque<Buffer> datas;
+    uint32_t total;
+#ifdef OS_Darwin
+    VDADecoder decoder;
+#endif
+    uint8_t* avBuffer;
+    int avBufferSize;
+    AVIOContext* avCtx;
+    AVFormatContext* fmtCtx;
+
+    uint8_t* frame;
+    int framePos, frameSize;
+
+    static int readFunction(void* opaque, uint8_t* buf, int buf_size);
+};
+
+int DecoderPrivate::readFunction(void* opaque, uint8_t* buf, int buf_size)
+{
+    DecoderPrivate* priv = static_cast<DecoderPrivate*>(opaque);
+    const int sz = std::min(priv->frameSize - priv->framePos, buf_size);
+    if (!sz)
+        return 0;
+    memcpy(buf, &priv->frame[priv->framePos], sz);
+    priv->framePos += sz;
+    return sz;
+}
 
 #ifdef OS_Darwin
 static void decoderOutputCallback(void* decompressionOutputRefCon,
@@ -13,40 +59,62 @@ static void decoderOutputCallback(void* decompressionOutputRefCon,
 #endif
 
 Decoder::Decoder()
-    : mInited(false), mTotal(0)
+    : mPriv(new DecoderPrivate)
 {
+    mPriv->inited = false;
+    mPriv->total = 0;
+    mPriv->fmtCtx = 0;
+}
+
+Decoder::~Decoder()
+{
+    av_free(mPriv->avBuffer);
+    if (mPriv->fmtCtx) {
+        avformat_free_context(mPriv->fmtCtx);
+    }
+    av_free(mPriv->avCtx);
+    delete mPriv;
+}
+
+bool Decoder::inited() const
+{
+    return mPriv->inited;
 }
 
 void Decoder::init(const uint8_t* extradata, int extrasize,
                    const uint8_t* sps, int spsSize,
                    const uint8_t* pps, int ppsSize)
 {
-    if (mInited)
+    if (mPriv->inited)
         return;
-    mInited = true;
+    mPriv->inited = true;
 
-    mHeader = reinterpret_cast<uint8_t*>(malloc(spsSize + 4 + ppsSize + 4 + 4));
+    mPriv->avBufferSize = 8192;
+    mPriv->avBuffer = reinterpret_cast<uint8_t*>(av_malloc(mPriv->avBufferSize));
+    mPriv->avCtx = avio_alloc_context(mPriv->avBuffer, mPriv->avBufferSize, 0, mPriv, DecoderPrivate::readFunction, 0, 0);
+
+    mPriv->header = reinterpret_cast<uint8_t*>(malloc(spsSize + 4 + ppsSize + 4 + 4));
     int sz = 0;
-    mHeader[sz++] = 0x0;
-    mHeader[sz++] = 0x0;
-    mHeader[sz++] = 0x0;
-    mHeader[sz++] = 0x1;
-    memcpy(mHeader + sz, sps, spsSize);
+    mPriv->header[sz++] = 0x0;
+    mPriv->header[sz++] = 0x0;
+    mPriv->header[sz++] = 0x0;
+    mPriv->header[sz++] = 0x1;
+    memcpy(mPriv->header + sz, sps, spsSize);
     sz += spsSize;
 
-    mHeader[sz++] = 0x0;
-    mHeader[sz++] = 0x0;
-    mHeader[sz++] = 0x0;
-    mHeader[sz++] = 0x1;
-    memcpy(mHeader + sz, pps, ppsSize);
+    mPriv->header[sz++] = 0x0;
+    mPriv->header[sz++] = 0x0;
+    mPriv->header[sz++] = 0x0;
+    mPriv->header[sz++] = 0x1;
+    memcpy(mPriv->header + sz, pps, ppsSize);
     sz += ppsSize;
 
-    mHeader[sz++] = 0x0;
-    mHeader[sz++] = 0x0;
-    mHeader[sz++] = 0x0;
-    mHeader[sz++] = 0x1;
+    mPriv->header[sz++] = 0x0;
+    mPriv->header[sz++] = 0x0;
+    mPriv->header[sz++] = 0x0;
+    mPriv->header[sz++] = 0x1;
 
-    mHeaderSize = sz;
+    mPriv->headerSize = sz;
 
     const int inWidth = 1440;
     const int inHeight = 900;
@@ -106,7 +174,7 @@ void Decoder::init(const uint8_t* extradata, int extrasize,
                               destinationImageBufferAttributes,
                               (VDADecoderOutputCallback*)decoderOutputCallback,
                               this,
-                              &mDecoder);
+                              &mPriv->decoder);
 
     if (kVDADecoderNoErr != status) {
         fprintf(stderr, "VDADecoderCreate failed. err: %d\n", status);
@@ -118,10 +186,6 @@ void Decoder::init(const uint8_t* extradata, int extrasize,
 
     return;
 #endif
-}
-
-Decoder::~Decoder()
-{
 }
 
 #ifdef OS_Darwin
@@ -147,44 +211,79 @@ void Decoder::decode(const char* data, int size)
     if (size == 8) { // is this a header?
         const uint64_t hdr = *reinterpret_cast<const uint64_t*>(data);
         if ((hdr & 0xff00) >> 8 == 0xbeeffeed) { // yes!
-            assert(!mTotal && mDatas.empty());
-            mTotal = hdr & 0xff;
+            if (!mPriv->datas.empty()) { // we didn't get the entire previous block of data
+                std::deque<DecoderPrivate::Buffer>::const_iterator it = mPriv->datas.begin();
+                const std::deque<DecoderPrivate::Buffer>::const_iterator end = mPriv->datas.end();
+                while (it != end) {
+                    free(it->data);
+                    ++it;
+                }
+                mPriv->datas.clear();
+                mPriv->total = 0;
+            }
+
+            mPriv->total = hdr & 0xff;
             return;
         }
     }
 
-    char* frame = 0;
-    uint32_t frameSize = 0;
+    if (mPriv->total == 0) // haven't seen a header yet
+        return;
 
-    char* buf = new char[size];
+#warning apply mPriv->header in front of the data?
+
+    // make a copy of the data
+    uint8_t* buf = new uint8_t[size];
     memcpy(buf, data, size);
-    if (mTotal == 1) {
-        frame = buf;
-        frameSize = size;
+    if (mPriv->total == 1) { // optimize for the case where the block only has one datagram
+        mPriv->frame = buf;
+        mPriv->framePos = 0;
+        mPriv->frameSize = size;
     } else {
-        Buffer buffer = { buf, size };
-        mDatas.push_back(buffer);
+        DecoderPrivate::Buffer buffer = { buf, size };
+        mPriv->datas.push_back(buffer);
     }
 
-    if (mTotal > 1 && mTotal == mDatas.size()) {
+    if (mPriv->datas.size() < mPriv->total) // haven't gotten all datagrams yet
+        return;
+
+    assert(mPriv->total == mPriv->datas.size());
+
+    if (mPriv->total > 1) {
         // reassemble!
-        frame = new char[mTotal];
-        frameSize = mTotal;
-        mTotal = 0;
-        buf = frame;
-        std::deque<Buffer>::const_iterator it = mDatas.begin();
-        const std::deque<Buffer>::const_iterator end = mDatas.end();
+        mPriv->frame = new uint8_t[mPriv->total];
+        mPriv->framePos = 0;
+        mPriv->frameSize = mPriv->total;
+        mPriv->total = 0;
+        buf = mPriv->frame;
+        std::deque<DecoderPrivate::Buffer>::const_iterator it = mPriv->datas.begin();
+        const std::deque<DecoderPrivate::Buffer>::const_iterator end = mPriv->datas.end();
         while (it != end) {
             memcpy(buf, it->data, it->size);
             buf += it->size;
             free(it->data);
             ++it;
         }
-        mDatas.clear();
+        mPriv->datas.clear();
     }
 
+    if (!mPriv->fmtCtx) {
+        mPriv->fmtCtx = avformat_alloc_context();
+        mPriv->fmtCtx->pb = mPriv->avCtx;
+        avformat_open_input(&mPriv->fmtCtx, "dummy", 0, 0);
+        avformat_find_stream_info(mPriv->fmtCtx, 0);
+    }
+
+    AVPacket packet;
+    const int ok = av_read_frame(mPriv->fmtCtx, &packet);
+    printf("av_read_frame %d\n", ok);
+    if (ok >= 0)
+        av_free_packet(&packet);
+
+    return;
+
 #ifdef OS_Darwin
-    CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, reinterpret_cast<const UInt8*>(frame), frameSize);
+    CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, reinterpret_cast<const UInt8*>(mPriv->frame), mPriv->frameSize);
 
     CFDictionaryRef frameInfo = NULL;
     OSStatus status = kVDADecoderNoErr;
@@ -195,7 +294,7 @@ void Decoder::decode(const char* data, int size)
 
     // ask the hardware to decode our frame, frameInfo will be retained and pased back to us
     // in the output callback for this frame
-    status = VDADecoderDecode(mDecoder, 0, frameData, frameInfo);
+    status = VDADecoderDecode(mPriv->decoder, 0, frameData, frameInfo);
     if (kVDADecoderNoErr != status) {
         fprintf(stderr, "VDADecoderDecode failed. err: %d\n", status);
     }

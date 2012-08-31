@@ -21,7 +21,10 @@ set(client_SRCS
 )
 
 set(client_LIBS
-    -lpthread
+    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavformat.a
+    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavcodec.a
+    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavutil.a
+    -lpthread -lz
 )
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
@@ -44,6 +47,13 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     endif()
 endif()
 
-include_directories(${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/../common ${VDADECODER_INCLUDE_DIR})
+set(client_INCS
+    ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}/../common
+    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/include
+    ${VDADECODER_INCLUDE_DIR}
+)
+
+include_directories(${client_INCS})
 add_executable(client ${client_SRCS})
 target_link_libraries(client ${client_LIBS} ${FOUNDATION_LIBRARY} ${APPKIT_LIBRARY} ${OPENGL_LIBRARY} ${IOSURFACE_LIBRARY} ${VDADECODER_LIBRARY} ${COREFOUNDATION_LIBRARY} ${COREVIDEO_LIBRARY})

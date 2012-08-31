@@ -1,6 +1,7 @@
 #include "Client.h"
 #include <string>
 #include <stdio.h>
+#include <assert.h>
 
 static inline std::string makeExtraData(unsigned char* sps, int spss, unsigned char* pps, int ppss)
 {
