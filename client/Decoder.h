@@ -26,10 +26,10 @@ private:
     int mHeaderSize;
     struct Buffer {
         char* data;
-        int size;
+        uint32_t size;
     };
     std::deque<Buffer> mDatas;
-    int mTotal;
+    uint32_t mTotal;
 #ifdef OS_Darwin
     VDADecoder mDecoder;
 #endif

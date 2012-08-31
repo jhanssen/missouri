@@ -142,96 +142,46 @@ static inline CFDictionaryRef MakeDictionaryWithDisplayTime(int64_t inFrameDispl
 void Decoder::decode(const char* data, int size)
 {
     printf("decoding %d\n", size);
-
     assert(size > 2);
 
-    // skip RTP header?
-    data += 12;
-    size -= 12;
-
-    const int fragment_type = data[0] & 0x1F;
-    const int nal_type = data[1] & 0x1F;
-    const int start_bit = data[1] & 0x80;
-    const int end_bit = data[1] & 0x40;
-
-    printf("fragment type %d, nal_type %d\n", fragment_type, nal_type);
-    if (fragment_type == 28) {
-        // good!
-        if (start_bit) {
+    if (size == 8) { // is this a header?
+        const uint64_t hdr = *reinterpret_cast<const uint64_t*>(data);
+        if ((hdr & 0xff00) >> 8 == 0xbeeffeed) { // yes!
             assert(!mTotal && mDatas.empty());
-            const char nal = (data[0] & 0x1f) | (data[1] & 0xe0);
-            char* buf = reinterpret_cast<char*>(malloc(size - 1));
-            buf[0] = nal;
-            memcpy(buf + 1, data + 2, size - 2);
-            Buffer buffer = { buf, size - 1 };
-            mDatas.push_back(buffer);
-            mTotal = size - 1;
-            if (!end_bit)
-                return;
-            // we have a full frame, onwards!
-        } else {
-            if (mDatas.empty()) // ignore frames where no start frame has been found
-                return;
-            char* buf = reinterpret_cast<char*>(malloc(size - 2));
-            memcpy(buf, data + 2, size - 2);
-            Buffer buffer = { buf, size - 2 };
-            mDatas.push_back(buffer);
-            mTotal += size - 2;
-            if (!end_bit)
-                return;
+            mTotal = hdr & 0xff;
+            return;
         }
-    } else {
-        return;
-        // assume full frame
-        assert(!mTotal && mDatas.empty());
-        char* buf = reinterpret_cast<char*>(malloc(size));
-        memcpy(buf, data, size);
-        Buffer buffer = { buf, size };
-        mDatas.push_back(buffer);
-        mTotal = size;
     }
 
-    if (mDatas.empty())
-        return;
+    char* frame = 0;
+    uint32_t frameSize = 0;
 
-    assert(mDatas.size() > 0 && end_bit);
-
-    char* frame;
-    int frameSize;
-    if (mDatas.size() == 1) {
-        frame = mDatas.front().data;
-        frameSize = mDatas.front().size;
+    char* buf = new char[size];
+    memcpy(buf, data, size);
+    if (mTotal == 1) {
+        frame = buf;
+        frameSize = size;
     } else {
-        // reassemble
-        frame = reinterpret_cast<char*>(malloc(mTotal));
+        Buffer buffer = { buf, size };
+        mDatas.push_back(buffer);
+    }
+
+    if (mTotal > 1 && mTotal == mDatas.size()) {
+        // reassemble!
+        frame = new char[mTotal];
         frameSize = mTotal;
-        int pos = 0;
+        mTotal = 0;
+        buf = frame;
         std::deque<Buffer>::const_iterator it = mDatas.begin();
         const std::deque<Buffer>::const_iterator end = mDatas.end();
         while (it != end) {
-            memcpy(frame + pos, it->data, it->size);
-            pos += it->size;
+            memcpy(buf, it->data, it->size);
+            buf += it->size;
             free(it->data);
             ++it;
         }
-        assert(pos == mTotal);
         mDatas.clear();
-        mTotal = 0;
     }
-
-    char* realframe = reinterpret_cast<char*>(malloc(frameSize + mHeaderSize));
-    memcpy(realframe, mHeader, mHeaderSize);
-    memcpy(realframe + mHeaderSize, frame, frameSize);
-
-    free(frame);
-
-    frame = realframe;
-    frameSize += mHeaderSize;
-
-    //const char* frame = data;
-    //const int frameSize = size;
-
-    printf("!!!reassembled frame %d\n", frameSize);
 
 #ifdef OS_Darwin
     CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, reinterpret_cast<const UInt8*>(frame), frameSize);

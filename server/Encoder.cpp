@@ -38,55 +38,17 @@ public:
     static void* run(void* arg);
 };
 
-static inline void stream_frame(AVFormatContext* avctx, uint8_t* payload, int size)
+static inline void sendHeader(const Host& host, const UdpSocket& socket, uint32_t nalCount)
 {
-    // initalize a packet
-    AVPacket p;
-    av_init_packet(&p);
-    p.data = payload;
-    p.size = size;
-    p.stream_index = 0;
-    p.flags = AV_PKT_FLAG_KEY;
-    p.pts = AV_NOPTS_VALUE;
-    p.dts = AV_NOPTS_VALUE;
-
-    // send it out
-    av_interleaved_write_frame(avctx, &p);
+    static uint64_t header = 0xbeeffeed00000000;
+    header |= static_cast<uint64_t>(nalCount);
+    socket.send(host, reinterpret_cast<char*>(&header), 8);
 }
 
 void* EncoderPrivate::run(void* arg)
 {
-    //Host host("192.168.11.120", 27584);
-    //UdpSocket socket;
-
-    av_register_all();
-    avformat_network_init();
-
-    AVFormatContext* avctx = avformat_alloc_context();
-    AVOutputFormat* fmt = av_guess_format("rtp", NULL, NULL);
-    avctx->oformat = fmt;
-
-    snprintf(avctx->filename, sizeof(avctx->filename), "rtp://%s:%d", "192.168.11.120", 27584);
-    if (avio_open(&avctx->pb, avctx->filename, AVIO_FLAG_WRITE) < 0)
-        printf("Unable to open URL\n");
-
-    AVStream* stream = av_new_stream(avctx, 1);
-
-    // initalize codec
-    AVCodecContext* c = stream->codec;
-    c->codec_id = CODEC_ID_H264;
-    c->codec_type = AVMEDIA_TYPE_VIDEO;
-    c->flags = CODEC_FLAG_GLOBAL_HEADER;
-    c->width = 1440;
-    c->height = 900;
-    c->time_base.den = 60;
-    c->time_base.num = 1;
-    c->gop_size = 60;
-    c->bit_rate = 400000;
-    avctx->flags = 0; //AVFMT_FLAG_RTP_HINT;
-
-    // write the header
-    avformat_write_header(avctx, 0);
+    Host host("192.168.11.120", 27584);
+    UdpSocket socket;
 
     EncoderPrivate* priv = static_cast<EncoderPrivate*>(arg);
     const int32_t w = priv->width;
@@ -108,13 +70,14 @@ void* EncoderPrivate::run(void* arg)
             //printf("frame %d, size %d\n", frame, frame_size);
             ++frame;
 
+            sendHeader(host, socket, i_nals);
             for (int i = 0; i < i_nals; ++i) {
-                //const int packetSize = nals[i].i_payload - 4; // ### right?
-                //const uint8_t* payload = nals[i].p_payload + 4;
+                const int packetSize = nals[i].i_payload - 4; // ### right?
+                const uint8_t* payload = nals[i].p_payload + 4;
                 //printf("nal %d (%d %p)\n", i, packetSize, payload);
 
-                stream_frame(avctx, nals[i].p_payload, nals[i].i_payload);
-                //socket.send(host, reinterpret_cast<const char*>(payload), packetSize);
+                //stream_frame(avctx, nals[i].p_payload, nals[i].i_payload);
+                socket.send(host, reinterpret_cast<const char*>(payload), packetSize);
             }
         } else {
             fprintf(stderr, "bad frame!\n");
