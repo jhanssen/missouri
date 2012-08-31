@@ -139,8 +139,9 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     mPriv->size = size;
 
     x264_param_t param;
-    x264_param_default_preset(&param, "veryfast", "zerolatency");
+    x264_param_default_preset(&param, "ultrafast", "zerolatency");
 
+/*
     param.i_threads = 1;
     param.i_width = width;
     param.i_height = height;
@@ -158,8 +159,17 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
 
     param.b_repeat_headers = 1;
     param.b_annexb = 1;
-
-    x264_param_apply_profile(&param, "baseline");
+    */
+    param.i_threads = 3;
+    param.i_width = 1440;
+    param.i_height = 900;
+    param.i_fps_num = 60;
+    param.i_fps_den = 1;
+    param.i_keyint_max = 60;
+    param.b_intra_refresh = 0;
+    param.rc.i_rc_method = X264_RC_ABR;
+    param.rc.i_bitrate = 400000;
+    x264_param_apply_profile(&param, "high");
 
     mPriv->encoder = x264_encoder_open(&param);
 
