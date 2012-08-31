@@ -13,8 +13,8 @@ static void decoderOutputCallback(void* decompressionOutputRefCon,
 #endif
 
 Decoder::Decoder()
+    : mInited(false), mTotal(0)
 {
-    mInited = false;
 }
 
 void Decoder::init(const uint8_t* extradata, int extrasize)
@@ -117,8 +117,76 @@ static inline CFDictionaryRef MakeDictionaryWithDisplayTime(int64_t inFrameDispl
 void Decoder::decode(const char* data, int size)
 {
     printf("decoding %d\n", size);
+
+    assert(size > 2);
+
+    // skip RTP header?
+    data += 12;
+    size -= 12;
+
+    const int fragment_type = data[0] & 0x1F;
+    const int nal_type = data[1] & 0x1F;
+    const int start_bit = data[1] & 0x80;
+    const int end_bit = data[1] & 0x40;
+
+    printf("fragment type %d, nal_type %d\n", fragment_type, nal_type);
+    if (fragment_type == 28) {
+        // good!
+        if (start_bit) {
+            assert(!mTotal && mDatas.empty());
+            const char nal = (data[0] & 0x1f) | (data[1] & 0xe0);
+            char* buf = reinterpret_cast<char*>(malloc(size - 1));
+            buf[0] = nal;
+            memcpy(buf + 1, data + 2, size - 2);
+            Buffer buffer = { buf, size - 1 };
+            mDatas.push_back(buffer);
+            mTotal = size - 1;
+            if (!end_bit)
+                return;
+            // we have a full frame, onwards!
+        } else {
+            char* buf = reinterpret_cast<char*>(malloc(size - 2));
+            memcpy(buf, data + 2, size - 2);
+            Buffer buffer = { buf, size - 2 };
+            mDatas.push_back(buffer);
+            mTotal += size - 2;
+            if (!end_bit)
+                return;
+        }
+    }
+
+    assert(mDatas.size() > 0 && end_bit);
+
+    char* frame;
+    int frameSize;
+    if (mDatas.size() == 1) {
+        frame = mDatas.front().data;
+        frameSize = mDatas.front().size;
+    } else {
+        // reassemble
+        frame = reinterpret_cast<char*>(malloc(mTotal));
+        frameSize = mTotal;
+        int pos = 0;
+        std::deque<Buffer>::const_iterator it = mDatas.begin();
+        const std::deque<Buffer>::const_iterator end = mDatas.end();
+        while (it != end) {
+            memcpy(frame + pos, it->data, it->size);
+            pos += it->size;
+            free(it->data);
+            ++it;
+        }
+        assert(pos == mTotal);
+        mDatas.clear();
+        mTotal = 0;
+    }
+
+    //const char* frame = data;
+    //const int frameSize = size;
+
+    printf("!!!reassembled frame %d\n", frameSize);
+
 #ifdef OS_Darwin
-    CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, reinterpret_cast<const UInt8*>(data), size);
+    CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, reinterpret_cast<const UInt8*>(frame), frameSize);
 
     CFDictionaryRef frameInfo = NULL;
     OSStatus status = kVDADecoderNoErr;

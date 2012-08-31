@@ -2,6 +2,7 @@
 #define DECODER_H
 
 #include <cstdint>
+#include <deque>
 #ifdef OS_Darwin
 # include <VDADecoder.h>
 #endif
@@ -19,6 +20,12 @@ public:
 
 private:
     bool mInited;
+    struct Buffer {
+        char* data;
+        int size;
+    };
+    std::deque<Buffer> mDatas;
+    int mTotal;
 #ifdef OS_Darwin
     VDADecoder mDecoder;
 #endif
