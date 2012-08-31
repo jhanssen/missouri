@@ -9,6 +9,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 set(server_LIBS
     ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libx264.a
     ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libswscale.a
+    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavformat.a
+    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavcodec.a
     ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavutil.a
     -lpthread -lws2_32
 )

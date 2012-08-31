@@ -5,6 +5,8 @@
 extern "C" {
 #include <x264.h>
 #include <libswscale/swscale.h>
+#include <libavformat/avformat.h>
+#include <libavformat/avio.h>
 }
 
 class EncoderPrivate
@@ -36,10 +38,55 @@ public:
     static void* run(void* arg);
 };
 
+static inline void stream_frame(AVFormatContext* avctx, uint8_t* payload, int size)
+{
+    // initalize a packet
+    AVPacket p;
+    av_init_packet(&p);
+    p.data = payload;
+    p.size = size;
+    p.stream_index = 0;
+    p.flags = AV_PKT_FLAG_KEY;
+    p.pts = AV_NOPTS_VALUE;
+    p.dts = AV_NOPTS_VALUE;
+
+    // send it out
+    av_interleaved_write_frame(avctx, &p);
+}
+
 void* EncoderPrivate::run(void* arg)
 {
-    Host host("192.168.11.120", 27584);
-    UdpSocket socket;
+    //Host host("192.168.11.120", 27584);
+    //UdpSocket socket;
+
+    av_register_all();
+    avformat_network_init();
+
+    AVFormatContext* avctx = avformat_alloc_context();
+    AVOutputFormat* fmt = av_guess_format("rtp", NULL, NULL);
+    avctx->oformat = fmt;
+
+    snprintf(avctx->filename, sizeof(avctx->filename), "rtp://%s:%d", "192.168.11.120", 27584);
+    if (avio_open(&avctx->pb, avctx->filename, AVIO_FLAG_WRITE) < 0)
+        printf("Unable to open URL\n");
+
+    AVStream* stream = av_new_stream(avctx, 1);
+
+    // initalize codec
+    AVCodecContext* c = stream->codec;
+    c->codec_id = CODEC_ID_H264;
+    c->codec_type = AVMEDIA_TYPE_VIDEO;
+    c->flags = CODEC_FLAG_GLOBAL_HEADER;
+    c->width = 1440;
+    c->height = 900;
+    c->time_base.den = 60;
+    c->time_base.num = 1;
+    c->gop_size = 60;
+    c->bit_rate = 400000;
+    avctx->flags = 0; //AVFMT_FLAG_RTP_HINT;
+
+    // write the header
+    avformat_write_header(avctx, 0);
 
     EncoderPrivate* priv = static_cast<EncoderPrivate*>(arg);
     const int32_t w = priv->width;
@@ -62,11 +109,12 @@ void* EncoderPrivate::run(void* arg)
             ++frame;
 
             for (int i = 0; i < i_nals; ++i) {
-                const int packetSize = nals[i].i_payload - 4; // ### right?
-                const uint8_t* payload = nals[i].p_payload + 4;
+                //const int packetSize = nals[i].i_payload - 4; // ### right?
+                //const uint8_t* payload = nals[i].p_payload + 4;
                 //printf("nal %d (%d %p)\n", i, packetSize, payload);
 
-                socket.send(host, reinterpret_cast<const char*>(payload), packetSize);
+                stream_frame(avctx, nals[i].p_payload, nals[i].i_payload);
+                //socket.send(host, reinterpret_cast<const char*>(payload), packetSize);
             }
         } else {
             fprintf(stderr, "bad frame!\n");
@@ -98,16 +146,18 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     param.i_height = height;
     param.i_fps_num = 60;
     param.i_fps_den = 1;
-    param.i_slice_max_size = 1400;
+    //param.i_slice_max_size = 1400;
 
     // Intra refres:
     param.i_keyint_max = 60;
     param.b_intra_refresh = 1;
 
     // Rate control:
-    param.rc.i_rc_method = X264_RC_CRF;
-    param.rc.f_rf_constant = 25;
-    param.rc.f_rf_constant_max = 35;
+    param.rc.i_rc_method = X264_RC_ABR;
+    param.rc.i_bitrate = 400000;
+
+    param.b_repeat_headers = 1;
+    param.b_annexb = 1;
 
     x264_param_apply_profile(&param, "baseline");
 
