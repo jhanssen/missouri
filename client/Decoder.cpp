@@ -270,8 +270,12 @@ void Decoder::decode(const char* data, int size)
     if (!mPriv->fmtCtx) {
         mPriv->fmtCtx = avformat_alloc_context();
         mPriv->fmtCtx->pb = mPriv->avCtx;
-        avformat_open_input(&mPriv->fmtCtx, "dummy", 0, 0);
-        avformat_find_stream_info(mPriv->fmtCtx, 0);
+        int ret = avformat_open_input(&mPriv->fmtCtx, "dummy", 0, 0);
+        if (ret)
+            printf("avformat open error %d\n", ret);
+        ret = avformat_find_stream_info(mPriv->fmtCtx, 0);
+        if (ret < 0)
+            printf("avformat find stream error %d\n", ret);
     }
 
     AVPacket packet;
