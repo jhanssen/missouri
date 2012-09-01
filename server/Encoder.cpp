@@ -38,9 +38,11 @@ public:
     static void* run(void* arg);
 };
 
-static inline void sendHeader(const Host& host, const UdpSocket& socket, uint32_t nalCount)
+static inline void sendHeader(const Host& host, UdpSocket& socket, uint32_t nalCount)
 {
-    static uint64_t header = 0xbeeffeed00000000;
+    static uint64_t header = 0xbeeffeed00000000LL;
+    //printf("sending %u nals\n", nalCount);
+    header &= 0xffffffff00000000LL;
     header |= static_cast<uint64_t>(nalCount);
     socket.send(host, reinterpret_cast<char*>(&header), 8);
 }
@@ -102,6 +104,7 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     mPriv->size = size;
 
     x264_param_t param;
+    memset(&param, '\0', sizeof(x264_param_t));
     x264_param_default_preset(&param, "ultrafast", "zerolatency");
 
 /*
@@ -121,8 +124,9 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     param.rc.i_bitrate = 400000;
 */
 
-    //param.b_annexb = 1;
-    param.b_repeat_headers = 1;
+    param.b_annexb = 0;
+    param.b_repeat_headers = 0;
+    param.i_slice_max_size = 1400;
     param.i_threads = 3;
     param.i_width = 1440;
     param.i_height = 900;
