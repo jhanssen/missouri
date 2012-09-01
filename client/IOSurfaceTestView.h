@@ -31,6 +31,7 @@
  */
 
 #import <Cocoa/Cocoa.h>
+#import <CoreVideo/CoreVideo.h>
 #import <OpenGL/gl.h>
 #import <IOSurface/IOSurface.h>
 
@@ -40,8 +41,10 @@
 	GLsizei			_texWidth;
 	GLsizei			_texHeight;
 	uint32_t		_seed;
+  CVPixelBufferRef image_;
 }
 
+- (void)setImage:(CVPixelBufferRef)image;
 - (void)setSurfaceID: (IOSurfaceID)anID;
 
 @end

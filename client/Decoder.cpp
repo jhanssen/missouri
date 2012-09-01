@@ -1,4 +1,5 @@
 #include "Decoder.h"
+#include "main.h"
 #include <stdio.h>
 #include <assert.h>
 #include <deque>
@@ -57,7 +58,12 @@ static void decoderOutputCallback(void* decompressionOutputRefCon,
                                   uint32_t infoFlags,
                                   CVImageBufferRef imageBuffer)
 {
-    printf("got decoded frame\n");
+    if (imageBuffer) {
+        postImage(imageBuffer);
+        printf("??got decoded frame\n");
+    } else {
+        printf("??callback with no image!\n");
+    }
 }
 #endif
 
@@ -102,19 +108,16 @@ void Decoder::init(const uint8_t* extradata, int extrasize,
     int sz = 0;
     mPriv->header[sz++] = 0x0;
     mPriv->header[sz++] = 0x0;
-    mPriv->header[sz++] = 0x0;
     mPriv->header[sz++] = 0x1;
     memcpy(mPriv->header + sz, sps, spsSize);
     sz += spsSize;
 
     mPriv->header[sz++] = 0x0;
     mPriv->header[sz++] = 0x0;
-    mPriv->header[sz++] = 0x0;
     mPriv->header[sz++] = 0x1;
     memcpy(mPriv->header + sz, pps, ppsSize);
     sz += ppsSize;
 
-    mPriv->header[sz++] = 0x0;
     mPriv->header[sz++] = 0x0;
     mPriv->header[sz++] = 0x0;
     mPriv->header[sz++] = 0x1;
@@ -247,12 +250,12 @@ void Decoder::decode(const char* data, int size)
 #warning apply mPriv->header in front of the data?
 
     // make a copy of the data
-    //uint8_t* buf = new uint8_t[size];
-    //memcpy(buf, data, size);
+    uint8_t* buf = new uint8_t[size];
+    memcpy(buf, data, size);
 
-    uint8_t* buf = new uint8_t[size + mPriv->headerSize];
-    memcpy(buf, mPriv->header, mPriv->headerSize);
-    memcpy(buf + mPriv->headerSize, data, size);
+    //uint8_t* buf = new uint8_t[size + mPriv->headerSize];
+    //memcpy(buf, mPriv->header, mPriv->headerSize);
+    //memcpy(buf + mPriv->headerSize, data, size);
     if (mPriv->packetCount == 1) { // optimize for the case where the block only has one datagram
         mPriv->frame = buf;
         mPriv->framePos = 0;
@@ -294,6 +297,7 @@ void Decoder::decode(const char* data, int size)
         printf("%02x ", mPriv->frame[i]);
     printf("\nframe done\n");
 
+    /*
     if (!mPriv->fmtCtx) {
         mPriv->fmtCtx = avformat_alloc_context();
         mPriv->fmtCtx->pb = mPriv->avCtx;
@@ -306,14 +310,18 @@ void Decoder::decode(const char* data, int size)
     }
 
     AVPacket packet;
-    const int ok = av_read_frame(mPriv->fmtCtx, &packet);
-    printf("av_read_frame %d\n", ok);
-    if (ok >= 0)
-        av_free_packet(&packet);
+    const int packetOk = av_read_frame(mPriv->fmtCtx, &packet);
+    printf("av_read_frame %d\n", packetOk);
+    if (packetOk < 0)
+        return;
+
+    printf("packet: ");
+    for (int i = 0; i < 8; ++i)
+        printf("%02x ", packet.data[i]);
+    printf("\n");
+    */
 
 #warning update mPriv->frame wrt framePos? if not, it needs to be freed
-
-    return;
 
 #ifdef OS_Darwin
     CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, reinterpret_cast<const UInt8*>(mPriv->frame), mPriv->frameSize);
@@ -330,6 +338,8 @@ void Decoder::decode(const char* data, int size)
     status = VDADecoderDecode(mPriv->decoder, 0, frameData, frameInfo);
     if (kVDADecoderNoErr != status) {
         fprintf(stderr, "VDADecoderDecode failed. err: %d\n", status);
+    } else {
+        fprintf(stderr, "really??\n");
     }
 
     // the dictionary passed into decode is retained by the framework so
@@ -338,4 +348,8 @@ void Decoder::decode(const char* data, int size)
 
     CFRelease(frameData);
 #endif
+
+    /*
+    if (packetOk >= 0)
+    av_free_packet(&packet);*/
 }
