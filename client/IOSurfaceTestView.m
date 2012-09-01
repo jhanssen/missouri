@@ -34,6 +34,7 @@
 #import <OpenGL/CGLMacro.h>
 #import <OpenGL/CGLIOSurface.h>
 
+
 @implementation IOSurfaceTestView
 
 - (NSOpenGLPixelFormat*) basicPixelFormat
@@ -73,7 +74,10 @@
 	CGLContextObj   cgl_ctx = [[self openGLContext]  CGLContextObj];
 	
 	glDeleteTextures(1, &_surfaceTexture);
-	
+
+  if (image_)
+    CFRelease(image_);
+
 	[super dealloc];
 }
 
@@ -99,13 +103,27 @@
 //							   GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, _surface, 0);
 		glBindTexture(GL_TEXTURE_RECTANGLE_ARB, 0);
 		glDisable(GL_TEXTURE_RECTANGLE_ARB);
+    
+    glFlush();
 	}
 }
 
+- (void)setImage:(CVPixelBufferRef)image
+{
+  if (image_)
+    CFRelease(image_);
+  image_ = CVBufferRetain(image);
+
+  IOSurfaceRef io_surface = CVPixelBufferGetIOSurface(image);
+  // _bindSurfaceToTexture assumes that the surface is retained.
+  CFRetain(io_surface);
+  [self _bindSurfaceToTexture:io_surface];
+}
 
 - (void)setSurfaceID: (IOSurfaceID)anID
 {
 	if (anID) {
+    // Note, IOSurfaceLookup retains the surface ref.
 		[self _bindSurfaceToTexture: IOSurfaceLookup(anID)];
 	}
 }
@@ -116,7 +134,7 @@
 	
 	glViewport(0, 0, [self bounds].size.width, [self bounds].size.height);
     
-    glClearColor(0.0, 0.0, 0.0, 0.0);
+    glClearColor(1.0, 0.0, 0.0, 0.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	
 	[[self openGLContext] flushBuffer];
@@ -128,7 +146,7 @@
  	CGLContextObj   cgl_ctx		= [[self openGLContext]  CGLContextObj];
 	
 	//Clear background
-	glClearColor(0.0, 1.0, 0.0, 0.0);
+	glClearColor(1.0, 0.0, 0.0, 0.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	
 	if (_surface) {

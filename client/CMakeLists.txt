@@ -42,6 +42,7 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
                      COREVIDEO_LIBRARY)
     set(EXTRA_LIBS ${VDADECODER_LIBRARY})
     find_path(VDADECODER_INCLUDE_DIR VDADecoder.h)
+    find_path(COREVIDEO_INCLUDE_DIR CVImageBuffer.h)
     if(${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
     endif()
@@ -52,6 +53,7 @@ set(client_INCS
     ${CMAKE_CURRENT_LIST_DIR}/../common
     ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/include
     ${VDADECODER_INCLUDE_DIR}
+    ${COREVIDEO_INCLUDE_DIR}
 )
 
 include_directories(${client_INCS})
