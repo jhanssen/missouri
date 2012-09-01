@@ -68,7 +68,7 @@ int main(int argc, char** argv)
 
     Main* m = [[Main alloc] init];
 
-    NSRect rect = NSMakeRect(0, 0, 1440, 900);
+    NSRect rect = NSMakeRect(0, 0, 1440, 810);
     NSWindow* window = [[[NSWindow alloc]
  		         initWithContentRect:rect
 		       	 styleMask:NSTitledWindowMask
