@@ -74,8 +74,8 @@ void* EncoderPrivate::run(void* arg)
 
             sendHeader(host, socket, i_nals);
             for (int i = 0; i < i_nals; ++i) {
-                const int packetSize = nals[i].i_payload - 4; // ### right?
-                const uint8_t* payload = nals[i].p_payload + 4;
+                const int packetSize = nals[i].i_payload; // ### right?
+                const uint8_t* payload = nals[i].p_payload;
                 //printf("nal %d (%d %p)\n", i, packetSize, payload);
 
                 //stream_frame(avctx, nals[i].p_payload, nals[i].i_payload);
