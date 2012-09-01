@@ -24,7 +24,7 @@ set(client_LIBS
     ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavformat.a
     ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavcodec.a
     ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavutil.a
-    -lpthread -lz
+    -lpthread -lz -lbz2
 )
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")

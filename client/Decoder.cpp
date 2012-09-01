@@ -21,6 +21,7 @@ public:
         int size;
     };
     std::deque<Buffer> datas;
+    uint32_t packetCount;
     uint32_t total;
 #ifdef OS_Darwin
     VDADecoder decoder;
@@ -40,9 +41,11 @@ int DecoderPrivate::readFunction(void* opaque, uint8_t* buf, int buf_size)
 {
     DecoderPrivate* priv = static_cast<DecoderPrivate*>(opaque);
     const int sz = std::min(priv->frameSize - priv->framePos, buf_size);
+    printf("!!sz calc %d %d\n", priv->framePos, priv->frameSize);
     if (!sz)
         return 0;
-    memcpy(buf, &priv->frame[priv->framePos], sz);
+    printf("!!readFunction, wanted %d returning %d\n", buf_size, sz);
+    memcpy(buf, priv->frame + priv->framePos, sz);
     priv->framePos += sz;
     return sz;
 }
@@ -62,6 +65,7 @@ Decoder::Decoder()
     : mPriv(new DecoderPrivate)
 {
     mPriv->inited = false;
+    mPriv->packetCount = 0;
     mPriv->total = 0;
     mPriv->fmtCtx = 0;
 }
@@ -89,6 +93,7 @@ void Decoder::init(const uint8_t* extradata, int extrasize,
         return;
     mPriv->inited = true;
 
+    av_register_all();
     mPriv->avBufferSize = 8192;
     mPriv->avBuffer = reinterpret_cast<uint8_t*>(av_malloc(mPriv->avBufferSize));
     mPriv->avCtx = avio_alloc_context(mPriv->avBuffer, mPriv->avBufferSize, 0, mPriv, DecoderPrivate::readFunction, 0, 0);
@@ -209,8 +214,14 @@ void Decoder::decode(const char* data, int size)
     assert(size > 2);
 
     if (size == 8) { // is this a header?
+        printf("potential header ");
+        for (int i = 0; i < 8; ++i) {
+            printf("%02x ", reinterpret_cast<const unsigned char*>(data)[i]);
+        }
+        printf("\n");
         const uint64_t hdr = *reinterpret_cast<const uint64_t*>(data);
-        if ((hdr & 0xff00) >> 8 == 0xbeeffeed) { // yes!
+        if (((hdr & 0xffffffff00000000LL) >> 32) == 0xbeeffeed) { // yes!
+            printf("found header\n");
             if (!mPriv->datas.empty()) { // we didn't get the entire previous block of data
                 std::deque<DecoderPrivate::Buffer>::const_iterator it = mPriv->datas.begin();
                 const std::deque<DecoderPrivate::Buffer>::const_iterator end = mPriv->datas.end();
@@ -219,42 +230,52 @@ void Decoder::decode(const char* data, int size)
                     ++it;
                 }
                 mPriv->datas.clear();
+                mPriv->packetCount = 0;
                 mPriv->total = 0;
             }
 
-            mPriv->total = hdr & 0xff;
+            mPriv->packetCount = (hdr & 0x00000000ffffffffLL);
             return;
         }
     }
 
-    if (mPriv->total == 0) // haven't seen a header yet
+    if (mPriv->packetCount == 0) { // haven't seen a header yet
+        printf("no header so far\n");
         return;
+    }
 
 #warning apply mPriv->header in front of the data?
 
     // make a copy of the data
-    uint8_t* buf = new uint8_t[size];
-    memcpy(buf, data, size);
-    if (mPriv->total == 1) { // optimize for the case where the block only has one datagram
+    //uint8_t* buf = new uint8_t[size];
+    //memcpy(buf, data, size);
+
+    uint8_t* buf = new uint8_t[size + mPriv->headerSize];
+    memcpy(buf, mPriv->header, mPriv->headerSize);
+    memcpy(buf + mPriv->headerSize, data, size);
+    if (mPriv->packetCount == 1) { // optimize for the case where the block only has one datagram
         mPriv->frame = buf;
         mPriv->framePos = 0;
         mPriv->frameSize = size;
     } else {
         DecoderPrivate::Buffer buffer = { buf, size };
+        mPriv->total += size;
         mPriv->datas.push_back(buffer);
     }
 
-    if (mPriv->datas.size() < mPriv->total) // haven't gotten all datagrams yet
+    if (mPriv->datas.size() < mPriv->packetCount) { // haven't gotten all datagrams yet
+        printf("wanted %d, got %lu so far\n", mPriv->packetCount, mPriv->datas.size());
         return;
+    }
 
-    assert(mPriv->total == mPriv->datas.size());
+    assert(mPriv->packetCount == mPriv->datas.size());
 
-    if (mPriv->total > 1) {
+    if (mPriv->packetCount > 1) {
         // reassemble!
         mPriv->frame = new uint8_t[mPriv->total];
         mPriv->framePos = 0;
         mPriv->frameSize = mPriv->total;
-        mPriv->total = 0;
+        mPriv->packetCount = 0;
         buf = mPriv->frame;
         std::deque<DecoderPrivate::Buffer>::const_iterator it = mPriv->datas.begin();
         const std::deque<DecoderPrivate::Buffer>::const_iterator end = mPriv->datas.end();
@@ -265,7 +286,13 @@ void Decoder::decode(const char* data, int size)
             ++it;
         }
         mPriv->datas.clear();
+        assert(buf == mPriv->frame + mPriv->total);
+        mPriv->total = 0;
     }
+
+    for (int i = 0; i < 16; ++i)
+        printf("%02x ", mPriv->frame[i]);
+    printf("\nframe done\n");
 
     if (!mPriv->fmtCtx) {
         mPriv->fmtCtx = avformat_alloc_context();
