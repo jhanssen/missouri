@@ -107,13 +107,15 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     memset(&param, '\0', sizeof(x264_param_t));
     x264_param_default_preset(&param, "ultrafast", "zerolatency");
 
-/*
+    param.b_annexb = 0;
+    param.b_repeat_headers = 0;
+    param.i_slice_max_size = 1400;
+
     param.i_threads = 1;
-    param.i_width = width;
-    param.i_height = height;
+    param.i_width = 1440;
+    param.i_height = 810;
     param.i_fps_num = 60;
     param.i_fps_den = 1;
-    //param.i_slice_max_size = 1400;
 
     // Intra refres:
     param.i_keyint_max = 60;
@@ -121,21 +123,20 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
 
     // Rate control:
     param.rc.i_rc_method = X264_RC_ABR;
-    param.rc.i_bitrate = 400000;
-*/
+    param.rc.i_bitrate = 2000000;
 
-    param.b_annexb = 0;
-    param.b_repeat_headers = 0;
-    param.i_slice_max_size = 1400;
+/*
     param.i_threads = 3;
     param.i_width = 1440;
-    param.i_height = 900;
+    param.i_height = 810;
     param.i_fps_num = 60;
     param.i_fps_den = 1;
     param.i_keyint_max = 60;
     param.b_intra_refresh = 0;
     param.rc.i_rc_method = X264_RC_ABR;
     param.rc.i_bitrate = 400000;
+*/
+
     x264_param_apply_profile(&param, "high");
 
     mPriv->encoder = x264_encoder_open(&param);
@@ -174,7 +175,7 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
 
     x264_picture_alloc(&mPriv->pic_in, X264_CSP_I420, width, height);
 
-    mPriv->scale = sws_getContext(width, height, PIX_FMT_RGB24, 1440, 900, PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+    mPriv->scale = sws_getContext(width, height, PIX_FMT_BGR24, 1440, 810, PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL);
 
     mPriv->encoding = false;
     pthread_mutex_init(&mPriv->mutex, 0);
