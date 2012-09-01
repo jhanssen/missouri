@@ -125,7 +125,7 @@ void Decoder::init(const uint8_t* extradata, int extrasize,
     mPriv->headerSize = sz;
 
     const int inWidth = 1440;
-    const int inHeight = 900;
+    const int inHeight = 810;
 
 #ifdef OS_Darwin
     OSStatus status;
