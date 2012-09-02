@@ -74,9 +74,7 @@ bool Decoder::inited() const
     return mPriv->inited;
 }
 
-void Decoder::init(const uint8_t* extradata, int extrasize,
-                   const uint8_t* sps, int spsSize,
-                   const uint8_t* pps, int ppsSize)
+void Decoder::init(const uint8_t* extradata, int extrasize)
 {
     if (mPriv->inited)
         return;

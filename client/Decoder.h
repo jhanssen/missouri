@@ -11,9 +11,7 @@ public:
     Decoder();
     ~Decoder();
 
-    void init(const uint8_t* extradata, int extrasize,
-              const uint8_t* sps, int spsSize,
-              const uint8_t* pps, int ppsSize);
+    void init(const uint8_t* extradata, int extrasize);
     bool inited() const;
 
     void decode(const char* data, int size);
