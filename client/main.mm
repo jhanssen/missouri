@@ -34,7 +34,7 @@ private:
 @implementation Main
 -(void)imageReady:(NSNotification *) imageNotification
 {
-    printf("image ready\n");
+    //printf("image ready\n");
     ImageWrapper* wrapper = [imageNotification object];
     [ioview setImage:wrapper->image];
     [ioview setNeedsDisplay:YES];

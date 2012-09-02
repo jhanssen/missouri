@@ -56,19 +56,19 @@ bool Client::streamCallback(const char* data, int size, void* userData)
 bool Client::controlCallback(const char* data, int size, void* userData)
 {
     Client* client = reinterpret_cast<Client*>(userData);
-    printf("feeding %d bytes\n", size);
+    //printf("feeding %d bytes\n", size);
     client->receiver.feed(data, size);
     if (!client->sps) {
-        printf("testing sps\n");
+        //printf("testing sps\n");
         if (!client->receiver.popBlock(&client->sps, &client->spss))
             return true;
-        printf("got sps of size %d\n", client->spss);
+        //printf("got sps of size %d\n", client->spss);
     }
     if (!client->pps) {
-        printf("testing pps\n");
+        //printf("testing pps\n");
         if (!client->receiver.popBlock(&client->pps, &client->ppss))
             return true;
-        printf("got pps of size %d\n", client->ppss);
+        //printf("got pps of size %d\n", client->ppss);
     }
     assert(client->pps && client->sps);
     assert(client->ppss > 0 && client->spss > 0);

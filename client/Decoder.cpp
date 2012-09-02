@@ -31,10 +31,10 @@ int DecoderPrivate::readFunction(void* opaque, uint8_t* buf, int buf_size)
 {
     DecoderPrivate* priv = static_cast<DecoderPrivate*>(opaque);
     const int sz = std::min(priv->frameSize - priv->framePos, buf_size);
-    printf("!!sz calc %d %d\n", priv->framePos, priv->frameSize);
+    //printf("!!sz calc %d %d\n", priv->framePos, priv->frameSize);
     if (!sz)
         return 0;
-    printf("!!readFunction, wanted %d returning %d\n", buf_size, sz);
+    //printf("!!readFunction, wanted %d returning %d\n", buf_size, sz);
     memcpy(buf, priv->frame + priv->framePos, sz);
     priv->framePos += sz;
     return sz;
@@ -49,9 +49,9 @@ static void decoderOutputCallback(void* decompressionOutputRefCon,
 {
     if (imageBuffer) {
         postImage(imageBuffer);
-        printf("??got decoded frame\n");
+        //printf("??got decoded frame\n");
     } else {
-        printf("??callback with no image!\n");
+        //printf("??callback with no image!\n");
     }
 }
 #endif
@@ -171,18 +171,20 @@ static inline CFDictionaryRef MakeDictionaryWithDisplayTime(int64_t inFrameDispl
 
 void Decoder::decode(const char* data, int size)
 {
-    printf("decoding %d\n", size);
+    //printf("decoding %d\n", size);
     assert(size > 2);
 
     if (size == 8) { // is this a header?
+        /*
         printf("potential header ");
         for (int i = 0; i < 8; ++i) {
             printf("%02x ", reinterpret_cast<const unsigned char*>(data)[i]);
         }
         printf("\n");
+        */
         const uint64_t hdr = *reinterpret_cast<const uint64_t*>(data);
         if (((hdr & 0xffffffff00000000LL) >> 32) == 0xbeeffeed) { // yes!
-            printf("found header\n");
+            //printf("found header\n");
             if (!mPriv->datas.empty()) { // we didn't get the entire previous block of data
                 std::deque<DecoderPrivate::Buffer>::const_iterator it = mPriv->datas.begin();
                 const std::deque<DecoderPrivate::Buffer>::const_iterator end = mPriv->datas.end();
@@ -201,7 +203,7 @@ void Decoder::decode(const char* data, int size)
     }
 
     if (mPriv->packetCount == 0) { // haven't seen a header yet
-        printf("no header so far\n");
+        //printf("no header so far\n");
         return;
     }
 
@@ -220,7 +222,7 @@ void Decoder::decode(const char* data, int size)
     }
 
     if (mPriv->datas.size() < mPriv->packetCount) { // haven't gotten all datagrams yet
-        printf("wanted %d, got %lu so far\n", mPriv->packetCount, mPriv->datas.size());
+        //printf("wanted %d, got %lu so far\n", mPriv->packetCount, mPriv->datas.size());
         return;
     }
 
@@ -246,9 +248,11 @@ void Decoder::decode(const char* data, int size)
         mPriv->total = 0;
     }
 
+    /*
     for (int i = 0; i < 16; ++i)
         printf("%02x ", mPriv->frame[i]);
     printf("\nframe done\n");
+    */
 
 #warning update mPriv->frame wrt framePos? if not, it needs to be freed
 
@@ -267,8 +271,6 @@ void Decoder::decode(const char* data, int size)
     status = VDADecoderDecode(mPriv->decoder, 0, frameData, frameInfo);
     if (kVDADecoderNoErr != status) {
         fprintf(stderr, "VDADecoderDecode failed. err: %d\n", status);
-    } else {
-        fprintf(stderr, "really??\n");
     }
 
     // the dictionary passed into decode is retained by the framework so
