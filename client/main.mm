@@ -15,7 +15,7 @@ private:
 @interface ImageWrapper : NSObject
 {
 @public
-  CVImageBufferRef image;
+    CVImageBufferRef image;
 }
 @end
 
@@ -25,7 +25,7 @@ private:
 @interface Main : NSObject
 {
 @public
-  IOSurfaceTestView* ioview;
+    IOSurfaceTestView* ioview;
 }
 -(id)init;
 -(void)imageReady:(NSNotification *) imageNotification;
@@ -34,31 +34,31 @@ private:
 @implementation Main
 -(void)imageReady:(NSNotification *) imageNotification
 {
-  printf("image ready\n");
-  ImageWrapper* wrapper = [imageNotification object];
-  [ioview setImage:wrapper->image];
-  [ioview setNeedsDisplay:YES];
-  CVBufferRelease(wrapper->image);
-  [wrapper release];
+    printf("image ready\n");
+    ImageWrapper* wrapper = [imageNotification object];
+    [ioview setImage:wrapper->image];
+    [ioview setNeedsDisplay:YES];
+    CVBufferRelease(wrapper->image);
+    [wrapper release];
 }
 
 -(id) init
 {
-  self = [super init];
+    self = [super init];
 
-  if (self != nil) {
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(imageReady:) name:@"MImageReady" object:nil];
-  }
+    if (self != nil) {
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(imageReady:) name:@"MImageReady" object:nil];
+    }
 
-  return self;
+    return self;
 }
 @end
 
 void postImage(CVImageBufferRef image)
 {
-  ImageWrapper* wrapper = [[ImageWrapper alloc] init];
-  wrapper->image = CVBufferRetain(image);
-  [[NSNotificationCenter defaultCenter] postNotificationName:@"MImageReady" object:wrapper];
+    ImageWrapper* wrapper = [[ImageWrapper alloc] init];
+    wrapper->image = CVBufferRetain(image);
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"MImageReady" object:wrapper];
 }
 
 int main(int argc, char** argv)
