@@ -63,5 +63,5 @@ set(client_INCS
 )
 
 include_directories(${client_INCS})
-add_executable(client ${client_SRCS})
+add_executable(client MACOSX_BUNDLE ${client_SRCS})
 target_link_libraries(client ${client_LIBS})

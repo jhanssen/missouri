@@ -64,22 +64,20 @@ void postImage(CVImageBufferRef image)
 int main(int argc, char** argv)
 {
     ScopedPool pool;
-    [NSApplication sharedApplication];
+    NSApplication* app = [NSApplication sharedApplication];
 
     Main* m = [[Main alloc] init];
 
-    NSRect rect = NSMakeRect(0, 0, 1440, 810);
-    NSWindow* window = [[[NSWindow alloc]
- 		         initWithContentRect:rect
-		       	 styleMask:NSTitledWindowMask
-		         backing:NSBackingStoreBuffered
-		         defer:NO]
-                        autorelease];
-    [window center];
-    [window makeKeyAndOrderFront:nil];
+    NSRect rect = NSMakeRect(0, 0, 640, 480);
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:rect
+                                         styleMask:(NSResizableWindowMask | NSClosableWindowMask | NSTitledWindowMask | NSMiniaturizableWindowMask)
+                                         backing:NSBackingStoreBuffered defer:NO];
     [window retain];
+    [window center];
+    [window setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary];
 
     NSView* content_view = [window contentView];
+    [content_view setAutoresizesSubviews:YES];
     IOSurfaceTestView* ioview = [[[IOSurfaceTestView alloc]
                                   initWithFrame:[content_view bounds]]
                                  autorelease];
@@ -87,9 +85,12 @@ int main(int argc, char** argv)
     [content_view addSubview:ioview];
     [ioview retain];
 
+    [app activateIgnoringOtherApps:YES];
+    [window makeKeyAndOrderFront:window];
+
     Client client;
 
-    [[NSRunLoop currentRunLoop] run];
+    [app run];
 
     return 0;
 }
