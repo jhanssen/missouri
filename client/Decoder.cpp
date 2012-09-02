@@ -6,17 +6,11 @@
 #ifdef OS_Darwin
 # include <VDADecoder.h>
 #endif
-extern "C" {
-#include <libavformat/avformat.h>
-#include <libavformat/avio.h>
-}
 
 class DecoderPrivate
 {
 public:
     bool inited;
-    uint8_t* header;
-    int headerSize;
     struct Buffer {
         uint8_t* data;
         int size;
@@ -27,11 +21,6 @@ public:
 #ifdef OS_Darwin
     VDADecoder decoder;
 #endif
-    uint8_t* avBuffer;
-    int avBufferSize;
-    AVIOContext* avCtx;
-    AVFormatContext* fmtCtx;
-
     uint8_t* frame;
     int framePos, frameSize;
 
@@ -73,16 +62,10 @@ Decoder::Decoder()
     mPriv->inited = false;
     mPriv->packetCount = 0;
     mPriv->total = 0;
-    mPriv->fmtCtx = 0;
 }
 
 Decoder::~Decoder()
 {
-    av_free(mPriv->avBuffer);
-    if (mPriv->fmtCtx) {
-        avformat_free_context(mPriv->fmtCtx);
-    }
-    av_free(mPriv->avCtx);
     delete mPriv;
 }
 
@@ -98,31 +81,6 @@ void Decoder::init(const uint8_t* extradata, int extrasize,
     if (mPriv->inited)
         return;
     mPriv->inited = true;
-
-    av_register_all();
-    mPriv->avBufferSize = 8192;
-    mPriv->avBuffer = reinterpret_cast<uint8_t*>(av_malloc(mPriv->avBufferSize));
-    mPriv->avCtx = avio_alloc_context(mPriv->avBuffer, mPriv->avBufferSize, 0, mPriv, DecoderPrivate::readFunction, 0, 0);
-
-    mPriv->header = reinterpret_cast<uint8_t*>(malloc(spsSize + 4 + ppsSize + 4 + 4));
-    int sz = 0;
-    mPriv->header[sz++] = 0x0;
-    mPriv->header[sz++] = 0x0;
-    mPriv->header[sz++] = 0x1;
-    memcpy(mPriv->header + sz, sps, spsSize);
-    sz += spsSize;
-
-    mPriv->header[sz++] = 0x0;
-    mPriv->header[sz++] = 0x0;
-    mPriv->header[sz++] = 0x1;
-    memcpy(mPriv->header + sz, pps, ppsSize);
-    sz += ppsSize;
-
-    mPriv->header[sz++] = 0x0;
-    mPriv->header[sz++] = 0x0;
-    mPriv->header[sz++] = 0x1;
-
-    mPriv->headerSize = sz;
 
     const int inWidth = 1440;
     const int inHeight = 810;
@@ -247,15 +205,10 @@ void Decoder::decode(const char* data, int size)
         return;
     }
 
-#warning apply mPriv->header in front of the data?
-
     // make a copy of the data
     uint8_t* buf = new uint8_t[size];
     memcpy(buf, data, size);
 
-    //uint8_t* buf = new uint8_t[size + mPriv->headerSize];
-    //memcpy(buf, mPriv->header, mPriv->headerSize);
-    //memcpy(buf + mPriv->headerSize, data, size);
     if (mPriv->packetCount == 1) { // optimize for the case where the block only has one datagram
         mPriv->frame = buf;
         mPriv->framePos = 0;
@@ -296,30 +249,6 @@ void Decoder::decode(const char* data, int size)
     for (int i = 0; i < 16; ++i)
         printf("%02x ", mPriv->frame[i]);
     printf("\nframe done\n");
-
-    /*
-    if (!mPriv->fmtCtx) {
-        mPriv->fmtCtx = avformat_alloc_context();
-        mPriv->fmtCtx->pb = mPriv->avCtx;
-        int ret = avformat_open_input(&mPriv->fmtCtx, "dummy", 0, 0);
-        if (ret)
-            printf("avformat open error %d\n", ret);
-        ret = avformat_find_stream_info(mPriv->fmtCtx, 0);
-        if (ret < 0)
-            printf("avformat find stream error %d\n", ret);
-    }
-
-    AVPacket packet;
-    const int packetOk = av_read_frame(mPriv->fmtCtx, &packet);
-    printf("av_read_frame %d\n", packetOk);
-    if (packetOk < 0)
-        return;
-
-    printf("packet: ");
-    for (int i = 0; i < 8; ++i)
-        printf("%02x ", packet.data[i]);
-    printf("\n");
-    */
 
 #warning update mPriv->frame wrt framePos? if not, it needs to be freed
 
