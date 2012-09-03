@@ -68,7 +68,7 @@ int main(int argc, char** argv)
 
     Main* m = [[Main alloc] init];
 
-    NSRect rect = NSMakeRect(0, 0, 1440, 810);
+    NSRect rect = NSMakeRect(0, 0, 640, 480);
     NSWindow *window = [[NSWindow alloc] initWithContentRect:rect
                                          styleMask:(NSResizableWindowMask | NSClosableWindowMask | NSTitledWindowMask | NSMiniaturizableWindowMask)
                                          backing:NSBackingStoreBuffered defer:NO];
@@ -81,6 +81,7 @@ int main(int argc, char** argv)
     IOSurfaceTestView* ioview = [[[IOSurfaceTestView alloc]
                                   initWithFrame:[content_view bounds]]
                                  autorelease];
+    [ioview setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     m->ioview = ioview;
     [content_view addSubview:ioview];
     [ioview retain];
