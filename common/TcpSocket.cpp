@@ -111,12 +111,12 @@ void* TcpSocketPrivate::run(void* arg)
                     }
                 }
             } while (!done);
-            printf("TcpSocket got socket data %d\n", ret);
+            //printf("TcpSocket got socket data %d\n", ret);
             if (priv->callback && !priv->callback(buf, ret, priv->userData)) {
                 return 0;
             }
         }
-        printf("tcp client wakeup\n");
+        //printf("tcp client wakeup\n");
 
         pthread_mutex_lock(&priv->mutex);
         if (priv->stopped) {
@@ -207,7 +207,7 @@ bool TcpSocket::send(const char* data, int size)
         }
         total += sent;
     } while (total < size);
-        printf("TcpSocket sent %ld\n", total);
+    //printf("TcpSocket sent %ld\n", total);
 
     assert(total == size);
     return true;

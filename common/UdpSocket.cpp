@@ -111,13 +111,13 @@ void* UdpSocketPrivate::run(void* arg)
                         return 0;
                     }
                 }
-                printf("got socket data %d\n", ret);
+                //printf("got socket data %d\n", ret);
                 if (priv->callback && !priv->callback(buf, ret, priv->userData)) {
                     return 0;
                 }
             } while (!done);
         }
-        printf("server wakeup\n");
+        //printf("server wakeup\n");
 
         pthread_mutex_lock(&priv->mutex);
         if (priv->stopped) {

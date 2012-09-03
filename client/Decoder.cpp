@@ -44,7 +44,7 @@ int DecoderPrivate::readFunction(void* opaque, uint8_t* buf, int buf_size)
     //printf("!!sz calc %d %d\n", priv->framePos, priv->frameSize);
     if (!sz)
         return 0;
-    printf("!!readFunction, wanted %d returning %d\n", buf_size, sz);
+    //printf("!!readFunction, wanted %d returning %d\n", buf_size, sz);
     memcpy(buf, priv->frame + priv->framePos, sz);
     priv->framePos += sz;
     return sz;
@@ -278,7 +278,7 @@ void Decoder::decode(const char* data, int size)
     */
 
     if (!mPriv->fmtCtx) {
-        printf("reading avformat\n");
+        //printf("reading avformat\n");
         mPriv->fmtCtx = avformat_alloc_context();
         mPriv->fmtCtx->pb = mPriv->avCtx;
         AVInputFormat* fmt = av_find_input_format("h264");
@@ -304,7 +304,7 @@ void Decoder::decode(const char* data, int size)
     int packetOk;
     for (;;) {
         packetOk = av_read_frame(mPriv->fmtCtx, &packet);
-        printf("av_read_frame %d\n", packetOk);
+        //printf("av_read_frame %d\n", packetOk);
         if (packetOk < 0)
             return;
         if (packet.stream_index != mPriv->streamIndex) {
@@ -312,10 +312,12 @@ void Decoder::decode(const char* data, int size)
             continue;
         }
 
+        /*
         printf("packet: ");
         for (int i = 0; i < 8; ++i)
             printf("%02x ", packet.data[i]);
         printf("\n");
+        */
 
 #warning update mPriv->frame wrt framePos? if not, it needs to be freed
 
