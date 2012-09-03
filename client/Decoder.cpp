@@ -6,6 +6,10 @@
 #ifdef OS_Darwin
 # include <VDADecoder.h>
 #endif
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavformat/avio.h>
+}
 
 class DecoderPrivate
 {
@@ -21,6 +25,12 @@ public:
 #ifdef OS_Darwin
     VDADecoder decoder;
 #endif
+    uint8_t* avBuffer;
+    int avBufferSize;
+    AVIOContext* avCtx;
+    AVFormatContext* fmtCtx;
+
+    std::string extra;
     uint8_t* frame;
     int framePos, frameSize;
 
@@ -34,7 +44,7 @@ int DecoderPrivate::readFunction(void* opaque, uint8_t* buf, int buf_size)
     //printf("!!sz calc %d %d\n", priv->framePos, priv->frameSize);
     if (!sz)
         return 0;
-    //printf("!!readFunction, wanted %d returning %d\n", buf_size, sz);
+    printf("!!readFunction, wanted %d returning %d\n", buf_size, sz);
     memcpy(buf, priv->frame + priv->framePos, sz);
     priv->framePos += sz;
     return sz;
@@ -62,10 +72,16 @@ Decoder::Decoder()
     mPriv->inited = false;
     mPriv->packetCount = 0;
     mPriv->total = 0;
+    mPriv->fmtCtx = 0;
 }
 
 Decoder::~Decoder()
 {
+    av_free(mPriv->avBuffer);
+    if (mPriv->fmtCtx) {
+        avformat_free_context(mPriv->fmtCtx);
+    }
+    av_free(mPriv->avCtx);
     delete mPriv;
 }
 
@@ -74,11 +90,17 @@ bool Decoder::inited() const
     return mPriv->inited;
 }
 
-void Decoder::init(const uint8_t* extradata, int extrasize)
+void Decoder::init(const std::string& extra)
 {
     if (mPriv->inited)
         return;
     mPriv->inited = true;
+    mPriv->extra = extra;
+
+    av_register_all();
+    mPriv->avBufferSize = 8192;
+    mPriv->avBuffer = reinterpret_cast<uint8_t*>(av_malloc(mPriv->avBufferSize));
+    mPriv->avCtx = avio_alloc_context(mPriv->avBuffer, mPriv->avBufferSize, 0, mPriv, DecoderPrivate::readFunction, 0, 0);
 
     const int inWidth = 1440;
     const int inHeight = 810;
@@ -96,7 +118,8 @@ void Decoder::init(const uint8_t* extradata, int extrasize)
     CFNumberRef sourceFormat = NULL;
     CFNumberRef pixelFormat = NULL;
 
-    CFDataRef inAVCCData = CFDataCreate(kCFAllocatorDefault, extradata, extrasize);
+    CFDataRef inAVCCData = CFDataCreate(kCFAllocatorDefault,
+                                        reinterpret_cast<const uint8_t*>(extra.data()), extra.size());
 
     // create a CFDictionary describing the source material for decoder configuration
     decoderConfiguration = CFDictionaryCreateMutable(kCFAllocatorDefault,
@@ -205,6 +228,8 @@ void Decoder::decode(const char* data, int size)
         return;
     }
 
+#warning apply mPriv->header in front of the data?
+
     // make a copy of the data
     uint8_t* buf = new uint8_t[size];
     memcpy(buf, data, size);
@@ -252,10 +277,34 @@ void Decoder::decode(const char* data, int size)
     printf("\nframe done\n");
     */
 
+    if (!mPriv->fmtCtx) {
+        printf("reading avformat\n");
+        mPriv->fmtCtx = avformat_alloc_context();
+        mPriv->fmtCtx->pb = mPriv->avCtx;
+        AVInputFormat* fmt = av_find_input_format("h264");
+        int ret = avformat_open_input(&mPriv->fmtCtx, "dummy", fmt, 0);
+        if (ret)
+            printf("avformat open error %d\n", ret);
+        ret = avformat_find_stream_info(mPriv->fmtCtx, 0);
+        if (ret < 0)
+            printf("avformat find stream error %d\n", ret);
+    }
+
+    AVPacket packet;
+    const int packetOk = av_read_frame(mPriv->fmtCtx, &packet);
+    printf("av_read_frame %d\n", packetOk);
+    if (packetOk < 0)
+        return;
+
+    printf("packet: ");
+    for (int i = 0; i < 8; ++i)
+        printf("%02x ", packet.data[i]);
+    printf("\n");
+
 #warning update mPriv->frame wrt framePos? if not, it needs to be freed
 
 #ifdef OS_Darwin
-    CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, reinterpret_cast<const UInt8*>(mPriv->frame), mPriv->frameSize);
+    CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, packet.data, packet.size);
 
     CFDictionaryRef frameInfo = NULL;
     OSStatus status = kVDADecoderNoErr;

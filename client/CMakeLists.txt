@@ -21,6 +21,9 @@ set(client_SRCS
 )
 
 set(client_LIBS
+    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavformat.a
+    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavcodec.a
+    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavutil.a
     -lpthread -lz -lbz2
 )
 
@@ -43,21 +46,21 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     if(${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
     endif()
-
     list(APPEND client_LIBS
-        ${FOUNDATION_LIBRARY}
-        ${APPKIT_LIBRARY}
-        ${OPENGL_LIBRARY}
-        ${IOSURFACE_LIBRARY}
-        ${VDADECODER_LIBRARY}
-        ${COREFOUNDATION_LIBRARY}
-        ${COREVIDEO_LIBRARY}
+         ${FOUNDATION_LIBRARY}
+         ${APPKIT_LIBRARY}
+         ${OPENGL_LIBRARY}
+         ${IOSURFACE_LIBRARY}
+         ${VDADECODER_LIBRARY}
+         ${COREFOUNDATION_LIBRARY}
+         ${COREVIDEO_LIBRARY}
     )
 endif()
 
 set(client_INCS
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/../common
+    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/include
     ${VDADECODER_INCLUDE_DIR}
     ${COREVIDEO_INCLUDE_DIR}
 )

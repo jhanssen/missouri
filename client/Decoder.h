@@ -2,6 +2,7 @@
 #define DECODER_H
 
 #include <cstdint>
+#include <string>
 
 class DecoderPrivate;
 
@@ -11,7 +12,7 @@ public:
     Decoder();
     ~Decoder();
 
-    void init(const uint8_t* extradata, int extrasize);
+    void init(const std::string& extra);
     bool inited() const;
 
     void decode(const char* data, int size);
