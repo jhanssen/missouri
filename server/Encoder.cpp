@@ -121,9 +121,9 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     param.b_intra_refresh = 1;
     //Rate control:
     param.rc.i_rc_method = X264_RC_CRF;
-    param.rc.f_rf_constant = 25;
-    param.rc.f_rf_constant_max = 35;
-    x264_param_apply_profile(&param, "baseline");
+    param.rc.f_rf_constant = 19;
+    param.rc.f_rf_constant_max = 25;
+    x264_param_apply_profile(&param, "high");
 
 /*
     param.i_threads = 1;
