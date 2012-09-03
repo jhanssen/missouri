@@ -29,8 +29,8 @@ public:
     int avBufferSize;
     AVIOContext* avCtx;
     AVFormatContext* fmtCtx;
+    int streamIndex;
 
-    std::string extra;
     uint8_t* frame;
     int framePos, frameSize;
 
@@ -73,6 +73,7 @@ Decoder::Decoder()
     mPriv->packetCount = 0;
     mPriv->total = 0;
     mPriv->fmtCtx = 0;
+    mPriv->streamIndex = -1;
 }
 
 Decoder::~Decoder()
@@ -95,7 +96,6 @@ void Decoder::init(const std::string& extra)
     if (mPriv->inited)
         return;
     mPriv->inited = true;
-    mPriv->extra = extra;
 
     av_register_all();
     mPriv->avBufferSize = 8192;
@@ -249,7 +249,7 @@ void Decoder::decode(const char* data, int size)
         return;
     }
 
-    assert(mPriv->packetCount == mPriv->datas.size());
+    assert(mPriv->packetCount >= mPriv->datas.size());
 
     if (mPriv->packetCount > 1) {
         // reassemble!
@@ -288,46 +288,61 @@ void Decoder::decode(const char* data, int size)
         ret = avformat_find_stream_info(mPriv->fmtCtx, 0);
         if (ret < 0)
             printf("avformat find stream error %d\n", ret);
+        for (int i = 0; i < mPriv->fmtCtx->nb_streams; ++i) {
+            if (mPriv->fmtCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+                mPriv->streamIndex = i;
+                break;
+            }
+        }
+        if (mPriv->streamIndex == -1) {
+            printf("no stream index\n");
+            abort();
+        }
     }
 
     AVPacket packet;
-    const int packetOk = av_read_frame(mPriv->fmtCtx, &packet);
-    printf("av_read_frame %d\n", packetOk);
-    if (packetOk < 0)
-        return;
+    int packetOk;
+    for (;;) {
+        packetOk = av_read_frame(mPriv->fmtCtx, &packet);
+        printf("av_read_frame %d\n", packetOk);
+        if (packetOk < 0)
+            return;
+        if (packet.stream_index != mPriv->streamIndex) {
+            av_free_packet(&packet);
+            continue;
+        }
 
-    printf("packet: ");
-    for (int i = 0; i < 8; ++i)
-        printf("%02x ", packet.data[i]);
-    printf("\n");
+        printf("packet: ");
+        for (int i = 0; i < 8; ++i)
+            printf("%02x ", packet.data[i]);
+        printf("\n");
 
 #warning update mPriv->frame wrt framePos? if not, it needs to be freed
 
 #ifdef OS_Darwin
-    CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, packet.data, packet.size);
+        CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, packet.data, packet.size);
 
-    CFDictionaryRef frameInfo = NULL;
-    OSStatus status = kVDADecoderNoErr;
+        CFDictionaryRef frameInfo = NULL;
+        OSStatus status = kVDADecoderNoErr;
 
-    // create a dictionary containg some information about the frame being decoded
-    // in this case, we pass in the display time aquired from the stream
-    frameInfo = MakeDictionaryWithDisplayTime(0 /*inFrameDisplayTime*/);
+        // create a dictionary containg some information about the frame being decoded
+        // in this case, we pass in the display time aquired from the stream
+        frameInfo = MakeDictionaryWithDisplayTime(0 /*inFrameDisplayTime*/);
 
-    // ask the hardware to decode our frame, frameInfo will be retained and pased back to us
-    // in the output callback for this frame
-    status = VDADecoderDecode(mPriv->decoder, 0, frameData, frameInfo);
-    if (kVDADecoderNoErr != status) {
-        fprintf(stderr, "VDADecoderDecode failed. err: %d\n", status);
-    }
+        // ask the hardware to decode our frame, frameInfo will be retained and pased back to us
+        // in the output callback for this frame
+        status = VDADecoderDecode(mPriv->decoder, 0, frameData, frameInfo);
+        if (kVDADecoderNoErr != status) {
+            fprintf(stderr, "VDADecoderDecode failed. err: %d\n", status);
+        }
 
-    // the dictionary passed into decode is retained by the framework so
-    // make sure to release it here
-    CFRelease(frameInfo);
+        // the dictionary passed into decode is retained by the framework so
+        // make sure to release it here
+        CFRelease(frameInfo);
 
-    CFRelease(frameData);
+        CFRelease(frameData);
 #endif
 
-    /*
-    if (packetOk >= 0)
-    av_free_packet(&packet);*/
+        av_free_packet(&packet);
+    }
 }
