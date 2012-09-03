@@ -68,6 +68,9 @@ bool GDICapturer::Capture()
         cursor_coord.y -= icon_info.yHotspot;
 
         DrawIcon(mTarget, cursor_coord.x, cursor_coord.y, hcur);
+
+        DeleteObject(icon_info.hbmColor);
+        DeleteObject(icon_info.hbmMask);
     }
 
     ret = GetDIBits(mTarget, mBmp, 0, mHeight, mBmpBuffer, &mBminfo, DIB_RGB_COLORS);
