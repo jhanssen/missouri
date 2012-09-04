@@ -68,6 +68,9 @@ public:
     TcpSocket::CloseCallbackFunc closeCallback;
     void* closeUserData;
 
+    uint8_t* pending;
+    int pendingSize;
+
     static void* run(void* arg);
 };
 
@@ -101,8 +104,10 @@ void* TcpSocketPrivate::run(void* arg)
                 if (ret == 0) {
                     // connection closed
                     printf("TcpSocket connection closed\n");
+                    pthread_mutex_lock(&priv->mutex);
                     if (priv->closeCallback)
                         priv->closeCallback(priv->closeUserData);
+                    pthread_mutex_unlock(&priv->mutex);
                     return 0;
                 } else if (ret == SOCKET_ERROR) {
                     const int err = socketError();
@@ -123,9 +128,22 @@ void* TcpSocketPrivate::run(void* arg)
                 }
             } while (!done);
             //printf("TcpSocket got socket data %d\n", ret);
-            if (priv->dataCallback && !priv->dataCallback(buf, ret, priv->dataUserData)) {
-                return 0;
+            pthread_mutex_lock(&priv->mutex);
+            if (priv->dataCallback) {
+                if (!priv->dataCallback(buf, ret, priv->dataUserData))
+                    return 0;
+            } else {
+                if (!priv->pending) {
+                    priv->pending = reinterpret_cast<uint8_t*>(malloc(ret));
+                    memcpy(priv->pending, buf, ret);
+                    priv->pendingSize = ret;
+                } else {
+                    priv->pending = reinterpret_cast<uint8_t*>(realloc(priv->pending, priv->pendingSize + ret));
+                    memcpy(priv->pending + priv->pendingSize, buf, ret);
+                    priv->pendingSize += ret;
+                }
             }
+            pthread_mutex_unlock(&priv->mutex);
         }
         //printf("tcp client wakeup\n");
 
@@ -147,6 +165,8 @@ TcpSocket::TcpSocket()
     mPriv->connected = false;
     mPriv->dataCallback = 0;
     mPriv->closeCallback = 0;
+    mPriv->pending = 0;
+    mPriv->pendingSize = 0;
 }
 
 TcpSocket::~TcpSocket()
@@ -162,20 +182,32 @@ TcpSocket::~TcpSocket()
 
         close(mPriv->client);
     }
+    if (mPriv->pending)
+        free(mPriv->pending);
 
     delete mPriv;
 }
 
 void TcpSocket::setDataCallback(DataCallbackFunc callback, void* userData)
 {
+    pthread_mutex_lock(&mPriv->mutex);
     mPriv->dataCallback = callback;
     mPriv->dataUserData = userData;
+    if (mPriv->pending) {
+        callback(reinterpret_cast<char*>(mPriv->pending), mPriv->pendingSize, userData);
+        free(mPriv->pending);
+        mPriv->pending = 0;
+        mPriv->pendingSize = 0;
+    }
+    pthread_mutex_unlock(&mPriv->mutex);
 }
 
 void TcpSocket::setCloseCallback(CloseCallbackFunc callback, void* userData)
 {
+    pthread_mutex_lock(&mPriv->mutex);
     mPriv->closeCallback = callback;
     mPriv->closeUserData = userData;
+    pthread_mutex_unlock(&mPriv->mutex);
 }
 
 bool TcpSocket::connect(const Host& host)
@@ -255,5 +287,5 @@ Host TcpSocket::remoteHost() const
     sockaddr_in addr;
     socklen_t addrsz = sizeof(sockaddr_in);
     getpeername(mPriv->client, reinterpret_cast<sockaddr*>(&addr), &addrsz);
-    return Host(addr.sin_addr.s_addr, htons(addr.sin_port));
+    return Host(addr.sin_addr.s_addr, ntohs(addr.sin_port));
 }

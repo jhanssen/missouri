@@ -29,9 +29,9 @@ private:
 Connection::Connection(TcpSocket* socket, Encoder* encoder)
     : mSocket(socket), mEncoder(encoder), mReffed(false)
 {
+    mHost = mSocket->remoteHost();
     mSocket->setDataCallback(dataReady, this);
     mSocket->setCloseCallback(closed, this);
-    mHost = mSocket->remoteHost();
 }
 
 void Connection::closed(void* userData)
@@ -84,6 +84,7 @@ static bool newSocket(TcpSocket* socket, void* userData)
     printf("got connection, encoder %p\n", enc);
 
     (void)new Connection(socket, enc);
+    return true;
 }
 
 int main(int argc, char** argv)

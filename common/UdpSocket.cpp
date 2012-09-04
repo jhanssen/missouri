@@ -225,7 +225,7 @@ bool UdpSocket::send(const Host& host, const char* data, int size)
             const int err = socketError();
             if (err == EINTR)
                 continue;
-            fprintf(stderr, "sendto failed in send: %d %s\n", err, socketErrorMessage(err).c_str());
+            fprintf(stderr, "sendto failed in send: %d %s (addr %u %u)\n", err, socketErrorMessage(err).c_str(), addr, host.port());
 
             close(mPriv->client);
             memset(&to, 0, sizeof(sockaddr_in));

@@ -65,9 +65,15 @@ void* EncoderPrivate::run(void* arg)
     for (;;) {
         pthread_mutex_lock(&priv->mutex);
         while (!priv->encoding) {
-            pthread_cond_wait(&priv->encodeCond, &priv->mutex);
-            if (priv->stopped)
+            if (priv->stopped) {
+                pthread_mutex_unlock(&priv->mutex);
                 return 0;
+            }
+            pthread_cond_wait(&priv->encodeCond, &priv->mutex);
+            if (priv->stopped) {
+                pthread_mutex_unlock(&priv->mutex);
+                return 0;
+            }
         }
         pthread_mutex_unlock(&priv->mutex);
 
@@ -80,6 +86,7 @@ void* EncoderPrivate::run(void* arg)
             //printf("frame %d, size %d\n", frame, frame_size);
             ++frame;
 
+            pthread_mutex_lock(&priv->mutex);
             std::vector<Host>::const_iterator it = priv->destinations.begin();
             const std::vector<Host>::const_iterator end = priv->destinations.end();
             while (it != end) {
@@ -94,6 +101,7 @@ void* EncoderPrivate::run(void* arg)
                 }
                 ++it;
             }
+            pthread_mutex_unlock(&priv->mutex);
         } else {
             fprintf(stderr, "bad frame!\n");
         }
@@ -127,8 +135,13 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
 
 Encoder::~Encoder()
 {
-    if (!mPriv->destinations.empty())
+    pthread_mutex_lock(&mPriv->mutex);
+    if (!mPriv->destinations.empty()) {
+        pthread_mutex_unlock(&mPriv->mutex);
         deinit();
+        pthread_mutex_lock(&mPriv->mutex);
+    }
+    pthread_mutex_unlock(&mPriv->mutex);
 
     pthread_cond_destroy(&mPriv->encodeCond);
     pthread_cond_destroy(&mPriv->doneCond);
@@ -168,6 +181,7 @@ void Encoder::init()
     param.rc.f_rf_constant_max = 25;
     x264_param_apply_profile(&param, "high");
 
+    mPriv->encoding = false;
     mPriv->encoder = x264_encoder_open(&param);
 
     x264_nal_t* p_nal;
@@ -224,28 +238,38 @@ void Encoder::deinit()
 
 void Encoder::ref(const Host& host, int width, int height)
 {
+    pthread_mutex_lock(&mPriv->mutex);
     if (mPriv->destinations.empty()) {
-       mPriv->outputWidth = width;
-       mPriv->outputHeight = height;
-       init();
+        mPriv->outputWidth = width;
+        mPriv->outputHeight = height;
+        pthread_mutex_unlock(&mPriv->mutex);
+        init();
+        pthread_mutex_lock(&mPriv->mutex);
     }
     mPriv->destinations.push_back(host);
+    pthread_mutex_unlock(&mPriv->mutex);
 }
 
 void Encoder::deref(const Host& host)
 {
+    pthread_mutex_lock(&mPriv->mutex);
     std::vector<Host>::iterator it = mPriv->destinations.begin();
     const std::vector<Host>::const_iterator end = mPriv->destinations.end();
     while (it != end) {
         if (it->address() == host.address()
             && it->port() == host.port()) {
             mPriv->destinations.erase(it);
-            if (mPriv->destinations.empty())
+            if (mPriv->destinations.empty()) {
+                pthread_mutex_unlock(&mPriv->mutex);
                 deinit();
+                pthread_mutex_lock(&mPriv->mutex);
+            }
+            pthread_mutex_unlock(&mPriv->mutex);
             return;
         }
         ++it;
     }
+    pthread_mutex_unlock(&mPriv->mutex);
 }
 
 void Encoder::getSps(uint8_t** payload, int* size)
@@ -268,6 +292,10 @@ int Encoder::headerSize() const
 void Encoder::encode()
 {
     pthread_mutex_lock(&mPriv->mutex);
+    if (mPriv->destinations.empty()) {
+        pthread_mutex_unlock(&mPriv->mutex);
+        return;
+    }
     while (mPriv->encoding) {
         pthread_cond_wait(&mPriv->doneCond, &mPriv->mutex);
     }
