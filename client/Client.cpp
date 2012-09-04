@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <assert.h>
 
+#define UDP_PORT 21048
+
 static inline std::string makeExtraData(unsigned char* sps, int spss, unsigned char* pps, int ppss)
 {
     const int total = (spss + 4 + ppss + 4) * 4 + 100;
@@ -48,7 +50,7 @@ Client::Client(int width, int height, const std::string& hostname)
 
     char data[10];
     uint32_t w = htonl(width), h = htonl(height);
-    uint16_t p = htons(21048);
+    uint16_t p = htons(UDP_PORT);
     memcpy(data, &p, 2);
     memcpy(data + 2, &w, 4);
     memcpy(data + 6, &h, 4);
@@ -86,7 +88,7 @@ bool Client::controlCallback(const char* data, int size, void* userData)
                                           reinterpret_cast<uint8_t*>(client->pps), client->ppss);
         client->decoder.init(extra);
 
-        client->stream.listen(27584);
+        client->stream.listen(UDP_PORT);
     }
     free(client->pps);
     free(client->sps);
