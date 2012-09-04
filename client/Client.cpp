@@ -36,12 +36,12 @@ static inline std::string makeExtraData(unsigned char* sps, int spss, unsigned c
     return extra;
 }
 
-Client::Client()
+Client::Client(const std::string& hostname)
     : sps(0), spss(0), pps(0), ppss(0)
 {
     stream.setCallback(streamCallback, this);
     control.setDataCallback(controlCallback, this);
-    if (!control.connect(Host("192.168.11.14", 21047))) {
+    if (!control.connect(Host(hostname, 21047))) {
         fprintf(stderr, "Unable to connect to server\n");
     }
 }

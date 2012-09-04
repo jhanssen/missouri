@@ -63,6 +63,11 @@ void postImage(CVImageBufferRef image)
 
 int main(int argc, char** argv)
 {
+    if (argc < 2) {
+        fprintf(stderr, "Syntax: %s <host>\n", argv[0]);
+        return 1;
+    }
+
     ScopedPool pool;
     NSApplication* app = [NSApplication sharedApplication];
 
@@ -89,7 +94,7 @@ int main(int argc, char** argv)
     [app activateIgnoringOtherApps:YES];
     [window makeKeyAndOrderFront:window];
 
-    Client client;
+    Client client(argv[1]);
 
     [app run];
 

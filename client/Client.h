@@ -5,11 +5,12 @@
 #include "UdpSocket.h"
 #include "Receiver.h"
 #include "Decoder.h"
+#include <string>
 
 class Client
 {
 public:
-    Client();
+    Client(const std::string& hostname);
 
 private:
     static bool streamCallback(const char* data, int size, void* userData);
