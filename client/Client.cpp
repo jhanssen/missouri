@@ -48,13 +48,15 @@ Client::Client(int width, int height, const std::string& hostname)
         return;
     }
 
-    char data[10];
+    char data[14];
+    int sz = htonl(10);
     uint32_t w = htonl(width), h = htonl(height);
     uint16_t p = htons(UDP_PORT);
-    memcpy(data, &p, 2);
-    memcpy(data + 2, &w, 4);
-    memcpy(data + 6, &h, 4);
-    control.send(data, 10);
+    memcpy(data, &sz, 4);
+    memcpy(data + 4, &p, 2);
+    memcpy(data + 6, &w, 4);
+    memcpy(data + 10, &h, 4);
+    control.send(data, 14);
 }
 
 bool Client::streamCallback(const char* data, int size, void* userData)
