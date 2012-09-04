@@ -170,6 +170,7 @@ void Encoder::init()
     param.i_width = mPriv->outputWidth;
     param.i_height = static_cast<int>(static_cast<double>(mPriv->outputWidth) / ratio);
     assert(param.i_height <= mPriv->outputHeight);
+    mPriv->outputHeight = param.i_height;
     param.i_fps_num = 60;
     param.i_fps_den = 1;
     // Intra refres:
