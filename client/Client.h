@@ -10,7 +10,7 @@
 class Client
 {
 public:
-    Client(const std::string& hostname);
+    Client(int width, int height, const std::string& hostname);
 
 private:
     static bool streamCallback(const char* data, int size, void* userData);

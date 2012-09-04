@@ -36,14 +36,23 @@ static inline std::string makeExtraData(unsigned char* sps, int spss, unsigned c
     return extra;
 }
 
-Client::Client(const std::string& hostname)
+Client::Client(int width, int height, const std::string& hostname)
     : sps(0), spss(0), pps(0), ppss(0)
 {
     stream.setCallback(streamCallback, this);
     control.setDataCallback(controlCallback, this);
     if (!control.connect(Host(hostname, 21047))) {
         fprintf(stderr, "Unable to connect to server\n");
+        return;
     }
+
+    char data[10];
+    uint32_t w = htonl(width), h = htonl(height);
+    uint16_t p = htons(21048);
+    memcpy(data, &p, 2);
+    memcpy(data + 2, &w, 4);
+    memcpy(data + 6, &h, 4);
+    control.send(data, 10);
 }
 
 bool Client::streamCallback(const char* data, int size, void* userData)

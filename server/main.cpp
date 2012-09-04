@@ -51,11 +51,13 @@ bool Connection::dataReady(const char* data, int size, void* userData)
     for (;;) {
         if (!conn->mReceiver.popBlock(&dt, &sz))
             break;
-        if (sz == 8 && !conn->mReffed) {
+        if (sz == 10 && !conn->mReffed) {
             conn->mReffed = true;
 
-            const int w = ntohl(*reinterpret_cast<uint32_t*>(dt));
-            const int h = ntohl(*reinterpret_cast<uint32_t*>(dt + 4));
+            const uint16_t port = ntohs(*reinterpret_cast<uint16_t*>(dt));
+            conn->mHost = Host(conn->mHost.address(), port);
+            const int w = ntohl(*reinterpret_cast<uint32_t*>(dt + 2));
+            const int h = ntohl(*reinterpret_cast<uint32_t*>(dt + 6));
             conn->mEncoder->ref(conn->mHost, w, h);
 
             uint8_t* payload;

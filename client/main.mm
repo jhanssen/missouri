@@ -94,7 +94,9 @@ int main(int argc, char** argv)
     [app activateIgnoringOtherApps:YES];
     [window makeKeyAndOrderFront:window];
 
-    Client client(argv[1]);
+    NSRect screenRect = [[NSScreen mainScreen] frame];
+
+    Client client(screenRect.size.width, screenRect.size.height, argv[1]);
 
     [app run];
 
