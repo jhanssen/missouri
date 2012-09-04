@@ -15,6 +15,11 @@
 #include <string.h>
 #include <stdio.h>
 
+Host::Host()
+    : mData(0)
+{
+}
+
 Host::Host(const std::string& address, uint16_t port)
     : mData(0)
 {
@@ -39,5 +44,11 @@ Host::Host(const std::string& address, uint16_t port)
 
     freeaddrinfo(result);
 
+    mData |= (static_cast<uint64_t>(port) << 48);
+}
+
+Host::Host(uint32_t address, uint16_t port)
+{
+    mData = address;
     mData |= (static_cast<uint64_t>(port) << 48);
 }

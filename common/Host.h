@@ -7,7 +7,9 @@
 class Host
 {
 public:
+    Host();
     Host(const std::string& addr, uint16_t port);
+    Host(uint32_t addr, uint16_t port);
 
     bool isValid() const { return mData != 0; }
 

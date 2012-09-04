@@ -1,7 +1,9 @@
 #include "Encoder.h"
 #include "UdpSocket.h"
+#include <vector>
 #include <pthread.h>
 #include <sched.h>
+#include <assert.h>
 extern "C" {
 #include <x264.h>
 #include <libswscale/swscale.h>
@@ -36,6 +38,11 @@ public:
     bool encoding;
 
     static void* run(void* arg);
+
+    int outputWidth, outputHeight;
+    std::vector<Host> destinations;
+
+    bool stopped;
 };
 
 static inline void sendHeader(const Host& host, UdpSocket& socket, uint32_t nalCount)
@@ -49,7 +56,6 @@ static inline void sendHeader(const Host& host, UdpSocket& socket, uint32_t nalC
 
 void* EncoderPrivate::run(void* arg)
 {
-    Host host("192.168.11.120", 27584);
     UdpSocket socket;
 
     EncoderPrivate* priv = static_cast<EncoderPrivate*>(arg);
@@ -60,6 +66,8 @@ void* EncoderPrivate::run(void* arg)
         pthread_mutex_lock(&priv->mutex);
         while (!priv->encoding) {
             pthread_cond_wait(&priv->encodeCond, &priv->mutex);
+            if (priv->stopped)
+                return 0;
         }
         pthread_mutex_unlock(&priv->mutex);
 
@@ -72,14 +80,19 @@ void* EncoderPrivate::run(void* arg)
             //printf("frame %d, size %d\n", frame, frame_size);
             ++frame;
 
-            sendHeader(host, socket, i_nals);
-            for (int i = 0; i < i_nals; ++i) {
-                const int packetSize = nals[i].i_payload; // ### right?
-                const uint8_t* payload = nals[i].p_payload;
-                //printf("nal %d (%d %p)\n", i, packetSize, payload);
+            std::vector<Host>::const_iterator it = priv->destinations.begin();
+            const std::vector<Host>::const_iterator end = priv->destinations.end();
+            while (it != end) {
+                sendHeader(*it, socket, i_nals);
+                for (int i = 0; i < i_nals; ++i) {
+                    const int packetSize = nals[i].i_payload; // ### right?
+                    const uint8_t* payload = nals[i].p_payload;
+                    //printf("nal %d (%d %p)\n", i, packetSize, payload);
 
-                //stream_frame(avctx, nals[i].p_payload, nals[i].i_payload);
-                socket.send(host, reinterpret_cast<const char*>(payload), packetSize);
+                    //stream_frame(avctx, nals[i].p_payload, nals[i].i_payload);
+                    socket.send(*it, reinterpret_cast<const char*>(payload), packetSize);
+                }
+                ++it;
             }
         } else {
             fprintf(stderr, "bad frame!\n");
@@ -98,11 +111,37 @@ void* EncoderPrivate::run(void* arg)
 Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t size)
     : mPriv(new EncoderPrivate)
 {
+    mPriv->stopped = false;
     mPriv->input = buffer;
     mPriv->width = width;
     mPriv->height = height;
     mPriv->size = size;
+    mPriv->outputWidth = mPriv->outputHeight = 0;
 
+    pthread_mutex_init(&mPriv->mutex, 0);
+    pthread_cond_init(&mPriv->encodeCond, 0);
+    pthread_cond_init(&mPriv->doneCond, 0);
+
+    mPriv->encoding = false;
+}
+
+Encoder::~Encoder()
+{
+    if (!mPriv->destinations.empty())
+        deinit();
+
+    pthread_cond_destroy(&mPriv->encodeCond);
+    pthread_cond_destroy(&mPriv->doneCond);
+    pthread_mutex_destroy(&mPriv->mutex);
+
+    delete[] mPriv->sps;
+    delete[] mPriv->pps;
+
+    delete mPriv;
+}
+
+void Encoder::init()
+{
     x264_param_t param;
     memset(&param, '\0', sizeof(x264_param_t));
     x264_param_default_preset(&param, "veryfast", "zerolatency");
@@ -111,9 +150,13 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     param.b_repeat_headers = 0;
     param.i_slice_max_size = 1400;
 
+    assert(mPriv->width > mPriv->height);
+    double ratio = static_cast<double>(mPriv->width) / static_cast<double>(mPriv->height);
+
     param.i_threads = 1;
-    param.i_width = 1440;
-    param.i_height = 810;
+    param.i_width = mPriv->outputWidth;
+    param.i_height = static_cast<int>(static_cast<double>(mPriv->outputWidth) / ratio);
+    assert(param.i_height <= mPriv->outputHeight);
     param.i_fps_num = 60;
     param.i_fps_den = 1;
     // Intra refres:
@@ -125,48 +168,8 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     param.rc.f_rf_constant_max = 25;
     x264_param_apply_profile(&param, "high");
 
-/*
-    param.i_threads = 1;
-    param.i_width = 1440;
-    param.i_height = 810;
-    param.i_fps_num = 60;
-    param.i_fps_den = 1;
-
-    // Intra refres:
-    param.i_keyint_max = 60;
-    param.b_intra_refresh = 1;
-
-    // Rate control:
-    param.rc.i_rc_method = X264_RC_ABR;
-    param.rc.i_bitrate = 2000000;
-*/
-
-/*
-    param.i_threads = 3;
-    param.i_width = 1440;
-    param.i_height = 810;
-    param.i_fps_num = 60;
-    param.i_fps_den = 1;
-    param.i_keyint_max = 60;
-    param.b_intra_refresh = 0;
-    param.rc.i_rc_method = X264_RC_ABR;
-    param.rc.i_bitrate = 400000;
-*/
-
-//    x264_param_apply_profile(&param, "high");
-
     mPriv->encoder = x264_encoder_open(&param);
 
-    /*
-    p_nal = headers
-    int sps_size = p_nal[0].i_payload - 4;
-    int pps_size = p_nal[1].i_payload - 4;
-    int sei_size = p_nal[2].i_payload;
-
-    uint8_t *sps = p_nal[0].p_payload + 4;
-    uint8_t *pps = p_nal[1].p_payload + 4;
-    uint8_t *sei = p_nal[2].p_payload;
-    */
     x264_nal_t* p_nal;
     int i_nal;
     mPriv->headerSize = x264_encoder_headers(mPriv->encoder, &p_nal, &i_nal);
@@ -189,27 +192,60 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t s
     mPriv->pps = new uint8_t[mPriv->ppsSize];
     memcpy(mPriv->pps, p_nal[1].p_payload + 4, mPriv->ppsSize);
 
-    x264_picture_alloc(&mPriv->pic_in, X264_CSP_I420, width, height);
+    x264_picture_alloc(&mPriv->pic_in, X264_CSP_I420, mPriv->outputWidth, mPriv->outputHeight);
 
-    mPriv->scale = sws_getContext(width, height, PIX_FMT_BGR24, 1440, 810, PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+    mPriv->scale = sws_getContext(mPriv->width, mPriv->height, PIX_FMT_BGR24,
+                                  mPriv->outputWidth, mPriv->outputHeight,
+                                  PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL);
 
-    mPriv->encoding = false;
-    pthread_mutex_init(&mPriv->mutex, 0);
-    pthread_cond_init(&mPriv->encodeCond, 0);
-    pthread_cond_init(&mPriv->doneCond, 0);
     pthread_create(&mPriv->thread, 0, EncoderPrivate::run, mPriv);
 }
 
-Encoder::~Encoder()
+void Encoder::deinit()
 {
-    pthread_cond_destroy(&mPriv->encodeCond);
-    pthread_cond_destroy(&mPriv->doneCond);
-    pthread_mutex_destroy(&mPriv->mutex);
+    pthread_mutex_lock(&mPriv->mutex);
+    mPriv->stopped = true;
+    pthread_cond_signal(&mPriv->encodeCond);
+    pthread_mutex_unlock(&mPriv->mutex);
+    void* ret;
+    pthread_join(mPriv->thread, &ret);
+    mPriv->stopped = false;
 
+    x264_picture_clean(&mPriv->pic_in);
+    x264_encoder_close(mPriv->encoder);
+
+    mPriv->spsSize = 0;
     delete[] mPriv->sps;
+    mPriv->sps = 0;
+    mPriv->ppsSize = 0;
     delete[] mPriv->pps;
+    mPriv->pps = 0;
+}
 
-    delete mPriv;
+void Encoder::ref(const Host& host, int width, int height)
+{
+    if (mPriv->destinations.empty()) {
+       mPriv->outputWidth = width;
+       mPriv->outputHeight = height;
+       init();
+    }
+    mPriv->destinations.push_back(host);
+}
+
+void Encoder::deref(const Host& host)
+{
+    std::vector<Host>::iterator it = mPriv->destinations.begin();
+    const std::vector<Host>::const_iterator end = mPriv->destinations.end();
+    while (it != end) {
+        if (it->address() == host.address()
+            && it->port() == host.port()) {
+            mPriv->destinations.erase(it);
+            if (mPriv->destinations.empty())
+                deinit();
+            return;
+        }
+        ++it;
+    }
 }
 
 void Encoder::getSps(uint8_t** payload, int* size)

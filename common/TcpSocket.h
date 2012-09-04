@@ -13,13 +13,18 @@ public:
     TcpSocket();
     ~TcpSocket();
 
-    typedef bool (*CallbackFunc)(const char*, int, void*);
-    void setCallback(CallbackFunc callback, void* userData);
+    typedef bool (*DataCallbackFunc)(const char*, int, void*);
+    void setDataCallback(DataCallbackFunc callback, void* userData);
+
+    typedef void (*CloseCallbackFunc)(void*);
+    void setCloseCallback(CloseCallbackFunc, void* userData);
 
     bool connect(const Host& host);
     bool send(const char* data, int size);
 
     bool isConnected() const;
+
+    Host remoteHost() const;
 
 private:
     // a bit hacky

@@ -1,5 +1,9 @@
 #include "Receiver.h"
-#include <arpa/inet.h>
+#ifdef OS_Windows
+# include <Winsock2.h>
+#else
+# include <arpa/inet.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>

@@ -63,8 +63,10 @@ public:
     pthread_t thread;
     pthread_mutex_t mutex;
 
-    TcpSocket::CallbackFunc callback;
-    void* userData;
+    TcpSocket::DataCallbackFunc dataCallback;
+    void* dataUserData;
+    TcpSocket::CloseCallbackFunc closeCallback;
+    void* closeUserData;
 
     static void* run(void* arg);
 };
@@ -98,13 +100,22 @@ void* TcpSocketPrivate::run(void* arg)
                 ret = recv(priv->client, buf, sizeof(buf), 0);
                 if (ret == 0) {
                     // connection closed
-#warning remember to handle connection closed here
                     printf("TcpSocket connection closed\n");
+                    if (priv->closeCallback)
+                        priv->closeCallback(priv->closeUserData);
                     return 0;
                 } else if (ret == SOCKET_ERROR) {
                     const int err = socketError();
-                    if (err == EINTR)
+                    if (err == EINTR) {
                         done = false;
+                    }
+#ifdef OS_Windows
+                    else if (err == WSAECONNRESET) {
+                        if (priv->closeCallback)
+                            priv->closeCallback(priv->closeUserData);
+                        return 0;
+                    }
+#endif
                     else {
                         fprintf(stderr, "TcpSocket recv error: %d %s\n", err, socketErrorMessage(err).c_str());
                         return 0;
@@ -112,7 +123,7 @@ void* TcpSocketPrivate::run(void* arg)
                 }
             } while (!done);
             //printf("TcpSocket got socket data %d\n", ret);
-            if (priv->callback && !priv->callback(buf, ret, priv->userData)) {
+            if (priv->dataCallback && !priv->dataCallback(buf, ret, priv->dataUserData)) {
                 return 0;
             }
         }
@@ -134,7 +145,8 @@ TcpSocket::TcpSocket()
 {
     mPriv->stopped = false;
     mPriv->connected = false;
-    mPriv->callback = 0;
+    mPriv->dataCallback = 0;
+    mPriv->closeCallback = 0;
 }
 
 TcpSocket::~TcpSocket()
@@ -154,10 +166,16 @@ TcpSocket::~TcpSocket()
     delete mPriv;
 }
 
-void TcpSocket::setCallback(CallbackFunc callback, void* userData)
+void TcpSocket::setDataCallback(DataCallbackFunc callback, void* userData)
 {
-    mPriv->callback = callback;
-    mPriv->userData = userData;
+    mPriv->dataCallback = callback;
+    mPriv->dataUserData = userData;
+}
+
+void TcpSocket::setCloseCallback(CloseCallbackFunc callback, void* userData)
+{
+    mPriv->closeCallback = callback;
+    mPriv->closeUserData = userData;
 }
 
 bool TcpSocket::connect(const Host& host)
@@ -228,4 +246,14 @@ void TcpSocket::setSocketDescriptor(void* socket)
     pthread_create(&mPriv->thread, 0, TcpSocketPrivate::run, mPriv);
 
     mPriv->connected = true;
+}
+
+Host TcpSocket::remoteHost() const
+{
+    if (!mPriv->connected)
+        return Host();
+    sockaddr_in addr;
+    int addrsz = sizeof(sockaddr_in);
+    getpeername(mPriv->client, reinterpret_cast<sockaddr*>(&addr), &addrsz);
+    return Host(addr.sin_addr.s_addr, htons(addr.sin_port));
 }
