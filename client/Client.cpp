@@ -40,7 +40,7 @@ Client::Client()
     : sps(0), spss(0), pps(0), ppss(0)
 {
     stream.setCallback(streamCallback, this);
-    control.setCallback(controlCallback, this);
+    control.setDataCallback(controlCallback, this);
     if (!control.connect(Host("192.168.11.14", 21047))) {
         fprintf(stderr, "Unable to connect to server\n");
     }

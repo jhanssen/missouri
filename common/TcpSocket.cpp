@@ -253,7 +253,7 @@ Host TcpSocket::remoteHost() const
     if (!mPriv->connected)
         return Host();
     sockaddr_in addr;
-    int addrsz = sizeof(sockaddr_in);
+    socklen_t addrsz = sizeof(sockaddr_in);
     getpeername(mPriv->client, reinterpret_cast<sockaddr*>(&addr), &addrsz);
     return Host(addr.sin_addr.s_addr, htons(addr.sin_port));
 }
