@@ -56,12 +56,19 @@ bool Connection::dataReady(const char* data, int size, void* userData)
 
             const uint16_t port = ntohs(*reinterpret_cast<uint16_t*>(dt));
             conn->mHost = Host(conn->mHost.address(), port);
-            const int w = ntohl(*reinterpret_cast<uint32_t*>(dt + 2));
-            const int h = ntohl(*reinterpret_cast<uint32_t*>(dt + 6));
+            int w = ntohl(*reinterpret_cast<uint32_t*>(dt + 2));
+            int h = ntohl(*reinterpret_cast<uint32_t*>(dt + 6));
             conn->mEncoder->ref(conn->mHost, w, h);
+            w = htonl(conn->mEncoder->encodedWidth());
+            h = htonl(conn->mEncoder->encodedHeight());
 
             uint8_t* payload;
             int32_t size, tmp;
+
+            tmp = htonl(8);
+            conn->mSocket->send(reinterpret_cast<char*>(&tmp), 4);
+            conn->mSocket->send(reinterpret_cast<char*>(&w), 4);
+            conn->mSocket->send(reinterpret_cast<char*>(&h), 4);
 
             conn->mEncoder->getSps(&payload, &size);
             tmp = htonl(size);

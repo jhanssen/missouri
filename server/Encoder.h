@@ -20,6 +20,9 @@ public:
     const uint8_t* outputBuffer() const;
     uint32_t outputSize() const;
 
+    int encodedWidth() const;
+    int encodedHeight() const;
+
     void getSps(uint8_t** payload, int* size);
     void getPps(uint8_t** payload, int* size);
     int headerSize() const;

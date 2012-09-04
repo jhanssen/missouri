@@ -91,7 +91,7 @@ bool Decoder::inited() const
     return mPriv->inited;
 }
 
-void Decoder::init(const std::string& extra)
+void Decoder::init(int iw, int ih, const std::string& extra)
 {
     if (mPriv->inited)
         return;
@@ -102,9 +102,6 @@ void Decoder::init(const std::string& extra)
     mPriv->avBuffer = reinterpret_cast<uint8_t*>(av_malloc(mPriv->avBufferSize));
     mPriv->avCtx = avio_alloc_context(mPriv->avBuffer, mPriv->avBufferSize, 0, mPriv, DecoderPrivate::readFunction, 0, 0);
 
-    const int inWidth = 1440;
-    const int inHeight = 810;
-
 #ifdef OS_Darwin
     OSStatus status;
     OSType inSourceFormat = 'avc1';
@@ -114,7 +111,7 @@ void Decoder::init(const std::string& extra)
     CFDictionaryRef emptyDictionary;
 
     CFNumberRef height = NULL;
-    CFNumberRef width= NULL;
+    CFNumberRef width = NULL;
     CFNumberRef sourceFormat = NULL;
     CFNumberRef pixelFormat = NULL;
 
@@ -127,8 +124,8 @@ void Decoder::init(const std::string& extra)
                                                      &kCFTypeDictionaryKeyCallBacks,
                                                      &kCFTypeDictionaryValueCallBacks);
 
-    height = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &inHeight);
-    width = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &inWidth);
+    height = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &ih);
+    width = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &iw);
     sourceFormat = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &inSourceFormat);
 
     CFDictionarySetValue(decoderConfiguration, kVDADecoderConfiguration_Height, height);

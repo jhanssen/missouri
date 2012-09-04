@@ -22,6 +22,8 @@ private:
     Receiver receiver;
     Decoder decoder;
 
+    int outputWidth, outputHeight;
+
     char* sps;
     int spss;
     char* pps;

@@ -39,7 +39,7 @@ static inline std::string makeExtraData(unsigned char* sps, int spss, unsigned c
 }
 
 Client::Client(int width, int height, const std::string& hostname)
-    : sps(0), spss(0), pps(0), ppss(0)
+    : outputWidth(0), outputHeight(0), sps(0), spss(0), pps(0), ppss(0)
 {
     stream.setCallback(streamCallback, this);
     control.setDataCallback(controlCallback, this);
@@ -71,6 +71,16 @@ bool Client::controlCallback(const char* data, int size, void* userData)
     Client* client = reinterpret_cast<Client*>(userData);
     //printf("feeding %d bytes\n", size);
     client->receiver.feed(data, size);
+    if (!client->outputWidth) {
+        char* buf;
+        int size;
+        if (!client->receiver.popBlock(&buf, &size))
+            return true;
+        if (size != 8)
+            return true;
+        client->outputWidth = ntohl(*reinterpret_cast<int*>(buf));
+        client->outputHeight = ntohl(*reinterpret_cast<int*>(buf + 4));
+    }
     if (!client->sps) {
         //printf("testing sps\n");
         if (!client->receiver.popBlock(&client->sps, &client->spss))
@@ -88,7 +98,7 @@ bool Client::controlCallback(const char* data, int size, void* userData)
     if (!client->decoder.inited()) {
         std::string extra = makeExtraData(reinterpret_cast<uint8_t*>(client->sps), client->spss,
                                           reinterpret_cast<uint8_t*>(client->pps), client->ppss);
-        client->decoder.init(extra);
+        client->decoder.init(client->outputWidth, client->outputHeight, extra);
 
         client->stream.listen(UDP_PORT);
     }

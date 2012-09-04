@@ -12,7 +12,7 @@ public:
     Decoder();
     ~Decoder();
 
-    void init(const std::string& extra);
+    void init(int width, int height, const std::string& extra);
     bool inited() const;
 
     void decode(const char* data, int size);

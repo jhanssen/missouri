@@ -314,3 +314,13 @@ uint32_t Encoder::outputSize() const
 {
     return mPriv->outputSize;
 }
+
+int Encoder::encodedWidth() const
+{
+    return mPriv->outputWidth;
+}
+
+int Encoder::encodedHeight() const
+{
+    return mPriv->outputHeight;
+}
