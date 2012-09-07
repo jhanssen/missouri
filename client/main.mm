@@ -27,30 +27,35 @@ private:
 @public
     IOSurfaceTestView* ioview;
 }
+
 -(id)init;
--(void)imageReady:(NSNotification *) imageNotification;
+-(void)imageReady:(ImageWrapper*) imageWrapper;
++(Main*)instance;
 @end
 
 @implementation Main
--(void)imageReady:(NSNotification *) imageNotification
+static Main *sInstance = 0;
+
+-(void)imageReady:(ImageWrapper *) imageWrapper
 {
     //printf("image ready\n");
-    ImageWrapper* wrapper = [imageNotification object];
-    [ioview setImage:wrapper->image];
+    [ioview setImage:imageWrapper->image];
     [ioview setNeedsDisplay:YES];
-    CVBufferRelease(wrapper->image);
-    [wrapper release];
+    CVBufferRelease(imageWrapper->image);
+    [imageWrapper release];
 }
 
--(id) init
+-(id)init
 {
     self = [super init];
-
-    if (self != nil) {
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(imageReady:) name:@"MImageReady" object:nil];
-    }
+    sInstance = self;
 
     return self;
+}
+
++(Main*)instance
+{
+    return sInstance;
 }
 @end
 
@@ -58,7 +63,7 @@ void postImage(CVImageBufferRef image)
 {
     ImageWrapper* wrapper = [[ImageWrapper alloc] init];
     wrapper->image = CVBufferRetain(image);
-    [[NSNotificationCenter defaultCenter] postNotificationName:@"MImageReady" object:wrapper];
+    [[Main instance] performSelectorOnMainThread:@selector(imageReady:) withObject:wrapper waitUntilDone:NO];
 }
 
 int main(int argc, char** argv)
