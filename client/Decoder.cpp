@@ -6,10 +6,6 @@
 #ifdef OS_Darwin
 # include <VDADecoder.h>
 #endif
-extern "C" {
-#include <libavformat/avformat.h>
-#include <libavformat/avio.h>
-}
 
 class DecoderPrivate
 {
@@ -25,30 +21,10 @@ public:
 #ifdef OS_Darwin
     VDADecoder decoder;
 #endif
-    uint8_t* avBuffer;
-    int avBufferSize;
-    AVIOContext* avCtx;
-    AVFormatContext* fmtCtx;
-    int streamIndex;
 
     uint8_t* frame;
     int framePos, frameSize;
-
-    static int readFunction(void* opaque, uint8_t* buf, int buf_size);
 };
-
-int DecoderPrivate::readFunction(void* opaque, uint8_t* buf, int buf_size)
-{
-    DecoderPrivate* priv = static_cast<DecoderPrivate*>(opaque);
-    const int sz = std::min(priv->frameSize - priv->framePos, buf_size);
-    //printf("!!sz calc %d %d\n", priv->framePos, priv->frameSize);
-    if (!sz)
-        return 0;
-    //printf("!!readFunction, wanted %d returning %d\n", buf_size, sz);
-    memcpy(buf, priv->frame + priv->framePos, sz);
-    priv->framePos += sz;
-    return sz;
-}
 
 #ifdef OS_Darwin
 static void decoderOutputCallback(void* decompressionOutputRefCon,
@@ -72,17 +48,10 @@ Decoder::Decoder()
     mPriv->inited = false;
     mPriv->packetCount = 0;
     mPriv->total = 0;
-    mPriv->fmtCtx = 0;
-    mPriv->streamIndex = -1;
 }
 
 Decoder::~Decoder()
 {
-    av_free(mPriv->avBuffer);
-    if (mPriv->fmtCtx) {
-        avformat_free_context(mPriv->fmtCtx);
-    }
-    av_free(mPriv->avCtx);
     delete mPriv;
 }
 
@@ -96,11 +65,6 @@ void Decoder::init(int iw, int ih, const std::string& extra)
     if (mPriv->inited)
         return;
     mPriv->inited = true;
-
-    av_register_all();
-    mPriv->avBufferSize = 8192;
-    mPriv->avBuffer = reinterpret_cast<uint8_t*>(av_malloc(mPriv->avBufferSize));
-    mPriv->avCtx = avio_alloc_context(mPriv->avBuffer, mPriv->avBufferSize, 0, mPriv, DecoderPrivate::readFunction, 0, 0);
 
 #ifdef OS_Darwin
     OSStatus status;
@@ -225,8 +189,6 @@ void Decoder::decode(const char* data, int size)
         return;
     }
 
-#warning apply mPriv->header in front of the data?
-
     // make a copy of the data
     uint8_t* buf = new uint8_t[size];
     memcpy(buf, data, size);
@@ -274,74 +236,29 @@ void Decoder::decode(const char* data, int size)
     printf("\nframe done\n");
     */
 
-    if (!mPriv->fmtCtx) {
-        //printf("reading avformat\n");
-        mPriv->fmtCtx = avformat_alloc_context();
-        mPriv->fmtCtx->pb = mPriv->avCtx;
-        AVInputFormat* fmt = av_find_input_format("h264");
-        int ret = avformat_open_input(&mPriv->fmtCtx, "dummy", fmt, 0);
-        if (ret)
-            printf("avformat open error %d\n", ret);
-        ret = avformat_find_stream_info(mPriv->fmtCtx, 0);
-        if (ret < 0)
-            printf("avformat find stream error %d\n", ret);
-        for (int i = 0; i < mPriv->fmtCtx->nb_streams; ++i) {
-            if (mPriv->fmtCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
-                mPriv->streamIndex = i;
-                break;
-            }
-        }
-        if (mPriv->streamIndex == -1) {
-            printf("no stream index\n");
-            abort();
-        }
+#ifdef OS_Darwin
+    CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, mPriv->frame, mPriv->frameSize);
+
+    CFDictionaryRef frameInfo = NULL;
+    OSStatus status = kVDADecoderNoErr;
+
+    // create a dictionary containg some information about the frame being decoded
+    // in this case, we pass in the display time aquired from the stream
+    frameInfo = MakeDictionaryWithDisplayTime(0 /*inFrameDisplayTime*/);
+
+    // ask the hardware to decode our frame, frameInfo will be retained and pased back to us
+    // in the output callback for this frame
+    status = VDADecoderDecode(mPriv->decoder, 0, frameData, frameInfo);
+    if (kVDADecoderNoErr != status) {
+        fprintf(stderr, "VDADecoderDecode failed. err: %d\n", status);
     }
 
-    AVPacket packet;
-    int packetOk;
-    for (;;) {
-        packetOk = av_read_frame(mPriv->fmtCtx, &packet);
-        //printf("av_read_frame %d\n", packetOk);
-        if (packetOk < 0)
-            return;
-        if (packet.stream_index != mPriv->streamIndex) {
-            av_free_packet(&packet);
-            continue;
-        }
+    // the dictionary passed into decode is retained by the framework so
+    // make sure to release it here
+    CFRelease(frameInfo);
 
-        /*
-        printf("packet: ");
-        for (int i = 0; i < 8; ++i)
-            printf("%02x ", packet.data[i]);
-        printf("\n");
-        */
-
-#warning update mPriv->frame wrt framePos? if not, it needs to be freed
-
-#ifdef OS_Darwin
-        CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, packet.data, packet.size);
-
-        CFDictionaryRef frameInfo = NULL;
-        OSStatus status = kVDADecoderNoErr;
-
-        // create a dictionary containg some information about the frame being decoded
-        // in this case, we pass in the display time aquired from the stream
-        frameInfo = MakeDictionaryWithDisplayTime(0 /*inFrameDisplayTime*/);
-
-        // ask the hardware to decode our frame, frameInfo will be retained and pased back to us
-        // in the output callback for this frame
-        status = VDADecoderDecode(mPriv->decoder, 0, frameData, frameInfo);
-        if (kVDADecoderNoErr != status) {
-            fprintf(stderr, "VDADecoderDecode failed. err: %d\n", status);
-        }
-
-        // the dictionary passed into decode is retained by the framework so
-        // make sure to release it here
-        CFRelease(frameInfo);
-
-        CFRelease(frameData);
+    CFRelease(frameData);
 #endif
 
-        av_free_packet(&packet);
-    }
+    delete[] mPriv->frame;
 }
