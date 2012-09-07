@@ -38,8 +38,10 @@ static inline std::string makeExtraData(unsigned char* sps, int spss, unsigned c
     return extra;
 }
 
-Client::Client(int width, int height, const std::string& hostname)
-    : outputWidth(0), outputHeight(0), sps(0), spss(0), pps(0), ppss(0)
+Client::Client(int width, int height, const std::string& hostname,
+               HeaderCallbackFunc callback, void* userData)
+    : outputWidth(0), outputHeight(0), sps(0), spss(0), pps(0), ppss(0),
+      headerCallback(callback), headerUserData(userData)
 {
     stream.setCallback(streamCallback, this);
     control.setDataCallback(controlCallback, this);
@@ -80,6 +82,9 @@ bool Client::controlCallback(const char* data, int size, void* userData)
             return true;
         client->outputWidth = ntohl(*reinterpret_cast<int*>(buf));
         client->outputHeight = ntohl(*reinterpret_cast<int*>(buf + 4));
+
+        if (client->headerCallback)
+            client->headerCallback(client->outputWidth, client->outputHeight, client->headerUserData);
     }
     if (!client->sps) {
         //printf("testing sps\n");

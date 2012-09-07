@@ -2,6 +2,9 @@
 #import "IOSurfaceTestView.h"
 #include "Client.h"
 
+#define INITIALWIDTH  640
+#define INITIALHEIGHT 480
+
 class ScopedPool
 {
 public:
@@ -11,6 +14,19 @@ public:
 private:
     NSAutoreleasePool* mPool;
 };
+
+static void headerCallback(int width, int height, void* userData)
+{
+    ScopedPool pool;
+
+    NSWindow* window = static_cast<NSWindow*>(userData);
+    NSSize sz = NSMakeSize(width, height);
+    float ratio = sz.height / sz.width;
+    [window setAspectRatio:sz];
+    sz.width = INITIALWIDTH;
+    sz.height = sz.width * ratio;
+    [window setContentSize:sz];
+}
 
 @interface ImageWrapper : NSObject
 {
@@ -78,7 +94,7 @@ int main(int argc, char** argv)
 
     Main* m = [[Main alloc] init];
 
-    NSRect rect = NSMakeRect(0, 0, 640, 480);
+    NSRect rect = NSMakeRect(0, 0, INITIALWIDTH, INITIALHEIGHT);
     NSWindow *window = [[NSWindow alloc] initWithContentRect:rect
                                          styleMask:(NSResizableWindowMask | NSClosableWindowMask | NSTitledWindowMask | NSMiniaturizableWindowMask)
                                          backing:NSBackingStoreBuffered defer:NO];
@@ -101,7 +117,8 @@ int main(int argc, char** argv)
 
     NSRect screenRect = [[NSScreen mainScreen] frame];
 
-    Client client(screenRect.size.width, screenRect.size.height, argv[1]);
+    Client client(screenRect.size.width, screenRect.size.height, argv[1],
+                  headerCallback, window);
 
     [app run];
 

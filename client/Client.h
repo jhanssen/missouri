@@ -10,7 +10,10 @@
 class Client
 {
 public:
-    Client(int width, int height, const std::string& hostname);
+    typedef void (*HeaderCallbackFunc)(int, int, void*);
+
+    Client(int width, int height, const std::string& hostname,
+           HeaderCallbackFunc callback, void* userData);
 
 private:
     static bool streamCallback(const char* data, int size, void* userData);
@@ -28,6 +31,9 @@ private:
     int spss;
     char* pps;
     int ppss;
+
+    HeaderCallbackFunc headerCallback;
+    void* headerUserData;
 };
 
 #endif
