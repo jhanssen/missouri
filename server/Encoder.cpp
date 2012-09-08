@@ -161,7 +161,7 @@ void Encoder::init()
 
     param.b_annexb = 0;
     param.b_repeat_headers = 0;
-    param.i_slice_max_size = 1400;
+    param.i_slice_max_size = 1500;
 
     assert(mPriv->width > mPriv->height);
     double ratio = static_cast<double>(mPriv->width) / static_cast<double>(mPriv->height);
@@ -173,13 +173,15 @@ void Encoder::init()
     mPriv->outputHeight = param.i_height;
     param.i_fps_num = 60;
     param.i_fps_den = 1;
-    // Intra refres:
-    param.i_keyint_max = 60;
+    // Intra refresh:
+    param.i_keyint_max = 30;
     param.b_intra_refresh = 1;
     //Rate control:
+    param.rc.i_vbv_max_bitrate = 24000;
+    param.rc.i_vbv_buffer_size = 400;
     param.rc.i_rc_method = X264_RC_CRF;
     param.rc.f_rf_constant = 19;
-    param.rc.f_rf_constant_max = 25;
+    param.rc.f_rf_constant_max = 19;
     x264_param_apply_profile(&param, "high");
 
     mPriv->encoding = false;
