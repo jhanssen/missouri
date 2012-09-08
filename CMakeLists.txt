@@ -3,7 +3,9 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-add_subdirectory(client)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    add_subdirectory(client)
+endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     add_subdirectory(server)
