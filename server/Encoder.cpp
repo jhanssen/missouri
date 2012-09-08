@@ -197,7 +197,7 @@ void Encoder::init()
         exit(0);
     }
 
-#if (X264_BUILD < 76)
+#if (X264_BUILD < 127)
 # error x264 version too old
 #endif
 
