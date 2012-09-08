@@ -2,6 +2,9 @@
 #import "IOSurfaceTestView.h"
 #include "Client.h"
 
+#define INITIALWIDTH  640
+#define INITIALHEIGHT 480
+
 class ScopedPool
 {
 public:
@@ -11,6 +14,19 @@ public:
 private:
     NSAutoreleasePool* mPool;
 };
+
+static void headerCallback(int width, int height, void* userData)
+{
+    ScopedPool pool;
+
+    NSWindow* window = static_cast<NSWindow*>(userData);
+    NSSize sz = NSMakeSize(width, height);
+    float ratio = sz.height / sz.width;
+    [window setAspectRatio:sz];
+    sz.width = INITIALWIDTH;
+    sz.height = sz.width * ratio;
+    [window setContentSize:sz];
+}
 
 @interface ImageWrapper : NSObject
 {
@@ -27,30 +43,35 @@ private:
 @public
     IOSurfaceTestView* ioview;
 }
+
 -(id)init;
--(void)imageReady:(NSNotification *) imageNotification;
+-(void)imageReady:(ImageWrapper*) imageWrapper;
++(Main*)instance;
 @end
 
 @implementation Main
--(void)imageReady:(NSNotification *) imageNotification
+static Main *sInstance = 0;
+
+-(void)imageReady:(ImageWrapper *) imageWrapper
 {
     //printf("image ready\n");
-    ImageWrapper* wrapper = [imageNotification object];
-    [ioview setImage:wrapper->image];
+    [ioview setImage:imageWrapper->image];
     [ioview setNeedsDisplay:YES];
-    CVBufferRelease(wrapper->image);
-    [wrapper release];
+    CVBufferRelease(imageWrapper->image);
+    [imageWrapper release];
 }
 
--(id) init
+-(id)init
 {
     self = [super init];
-
-    if (self != nil) {
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(imageReady:) name:@"MImageReady" object:nil];
-    }
+    sInstance = self;
 
     return self;
+}
+
++(Main*)instance
+{
+    return sInstance;
 }
 @end
 
@@ -58,7 +79,7 @@ void postImage(CVImageBufferRef image)
 {
     ImageWrapper* wrapper = [[ImageWrapper alloc] init];
     wrapper->image = CVBufferRetain(image);
-    [[NSNotificationCenter defaultCenter] postNotificationName:@"MImageReady" object:wrapper];
+    [[Main instance] performSelectorOnMainThread:@selector(imageReady:) withObject:wrapper waitUntilDone:NO];
 }
 
 int main(int argc, char** argv)
@@ -73,7 +94,7 @@ int main(int argc, char** argv)
 
     Main* m = [[Main alloc] init];
 
-    NSRect rect = NSMakeRect(0, 0, 640, 480);
+    NSRect rect = NSMakeRect(0, 0, INITIALWIDTH, INITIALHEIGHT);
     NSWindow *window = [[NSWindow alloc] initWithContentRect:rect
                                          styleMask:(NSResizableWindowMask | NSClosableWindowMask | NSTitledWindowMask | NSMiniaturizableWindowMask)
                                          backing:NSBackingStoreBuffered defer:NO];
@@ -96,7 +117,8 @@ int main(int argc, char** argv)
 
     NSRect screenRect = [[NSScreen mainScreen] frame];
 
-    Client client(screenRect.size.width, screenRect.size.height, argv[1]);
+    Client client(screenRect.size.width, screenRect.size.height, argv[1],
+                  headerCallback, window);
 
     [app run];
 

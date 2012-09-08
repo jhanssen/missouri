@@ -21,9 +21,6 @@ set(client_SRCS
 )
 
 set(client_LIBS
-    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavformat.a
-    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavcodec.a
-    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/lib/libavutil.a
     -lpthread -lz -lbz2
 )
 
@@ -60,7 +57,6 @@ endif()
 set(client_INCS
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/../common
-    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/include
     ${VDADECODER_INCLUDE_DIR}
     ${COREVIDEO_INCLUDE_DIR}
 )
