@@ -31,7 +31,7 @@ ExternalProject_Add(
     x264
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/x264
     GIT_REPOSITORY "git://git.videolan.org/x264.git"
-    GIT_TAG "37be55213a39db40cf159ada319bd482a1b00680"
+    GIT_TAG "198a7ea13ccb"
     CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/x264/configure --enable-static --prefix="${CMAKE_CURRENT_SOURCE_DIR}" "--extra-cflags=${X264_INCS}" "--extra-ldflags=${X264_LIBS}"
     PREFIX ${CMAKE_CURRENT_SOURCE_DIR}
     BUILD_COMMAND "$(MAKE)"
