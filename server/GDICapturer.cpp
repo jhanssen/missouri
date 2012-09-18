@@ -46,7 +46,7 @@ void GDICapturer::Init()
 bool GDICapturer::Capture()
 {
     int ret = 0;
-    ret = BitBlt(mTarget, 0, 0, mWidth, mHeight, mScreen, 0, 0, SRCCOPY | CAPTUREBLT);
+    ret = BitBlt(mTarget, 0, 0, mWidth, mHeight, mScreen, 0, 0, SRCCOPY);
     assert(ret);
 
     // add the cursor
