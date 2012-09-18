@@ -17,6 +17,7 @@ set(server_LIBS
 
 set(server_SRCS
     main.cpp
+    DWMCapturer.cpp
     GDICapturer.cpp
     Encoder.cpp
     ../common/Receiver.cpp
