@@ -19,7 +19,7 @@ set(server_INCS
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/../common
     ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/include
-    ${CMAKE_CURRENT_LIST_DIR}/../win8dupl/Win8Dupl/Win8Dupl
+    ${CMAKE_CURRENT_LIST_DIR}/../win8dupl
 )
 
 set(server_SRCS
