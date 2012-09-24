@@ -25,7 +25,6 @@ set(server_INCS
 set(server_SRCS
     main.cpp
     Win8Capturer.cpp
-    GDICapturer.cpp
     Encoder.cpp
     ../common/Receiver.cpp
     ../common/Host.cpp
