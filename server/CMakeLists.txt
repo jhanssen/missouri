@@ -15,9 +15,16 @@ set(server_LIBS
     -lpthread -lws2_32
 )
 
+set(server_INCS
+    ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}/../common
+    ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/include
+    ${CMAKE_CURRENT_LIST_DIR}/../win8dupl/Win8Dupl/Win8Dupl
+)
+
 set(server_SRCS
     main.cpp
-    DWMCapturer.cpp
+    Win8Capturer.cpp
     GDICapturer.cpp
     Encoder.cpp
     ../common/Receiver.cpp
@@ -27,6 +34,6 @@ set(server_SRCS
     ../common/TcpServer.cpp
 )
 
-include_directories(${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/../common ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/include)
+include_directories(${server_INCS})
 add_executable(server ${server_SRCS})
 target_link_libraries(server ${server_LIBS})

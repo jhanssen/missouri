@@ -9,7 +9,7 @@ class EncoderPrivate;
 class Encoder
 {
 public:
-    Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t size);
+    Encoder(const uint8_t* buffer, int32_t width, int32_t height);
     ~Encoder();
 
     void ref(const Host& host, int width, int height);

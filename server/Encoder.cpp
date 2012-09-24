@@ -16,7 +16,6 @@ class EncoderPrivate
 public:
     const uint8_t* input;
     int32_t width, height;
-    int32_t size;
 
     uint8_t* output;
     int32_t outputSize;
@@ -77,7 +76,7 @@ void* EncoderPrivate::run(void* arg)
         }
         pthread_mutex_unlock(&priv->mutex);
 
-        int srcstride = w * 3; // RGB stride is 3 * width
+        int srcstride = w * 4; // RGB stride is 3 * width
         sws_scale(priv->scale, &priv->input, &srcstride, 0, h, priv->pic_in.img.plane, priv->pic_in.img.i_stride);
         x264_nal_t* nals;
         int i_nals;
@@ -116,14 +115,13 @@ void* EncoderPrivate::run(void* arg)
     return 0;
 }
 
-Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height, int32_t size)
+Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height)
     : mPriv(new EncoderPrivate)
 {
     mPriv->stopped = false;
     mPriv->input = buffer;
     mPriv->width = width;
     mPriv->height = height;
-    mPriv->size = size;
     mPriv->outputWidth = mPriv->outputHeight = 0;
 
     pthread_mutex_init(&mPriv->mutex, 0);
@@ -211,7 +209,7 @@ void Encoder::init()
 
     x264_picture_alloc(&mPriv->pic_in, X264_CSP_I420, mPriv->outputWidth, mPriv->outputHeight);
 
-    mPriv->scale = sws_getContext(mPriv->width, mPriv->height, PIX_FMT_BGR24,
+    mPriv->scale = sws_getContext(mPriv->width, mPriv->height, PIX_FMT_RGB32,
                                   mPriv->outputWidth, mPriv->outputHeight,
                                   PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL);
 

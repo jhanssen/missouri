@@ -1,4 +1,4 @@
-#include "GDICapturer.h"
+#include "Win8Capturer.h"
 #include "Encoder.h"
 #include "Receiver.h"
 #include "TcpServer.h"
@@ -103,12 +103,11 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    GDICapturer cap;
+    Win8Capturer cap;
     const uint8_t* buffer = cap.GetBuffer();
     const int32_t width = cap.GetWidth();
     const int32_t height = cap.GetHeight();
-    const int32_t size = cap.GetImageSize();
-    Encoder enc(buffer, width, height, size);
+    Encoder enc(buffer, width, height);
 
     const uint16_t port = 21047;
     TcpServer server;
@@ -122,8 +121,8 @@ int main(int argc, char** argv)
 
     const int sleepFor = 1000 / 60;
     for (;;) {
-        cap.Capture();
-        enc.encode();
+        if (cap.Capture())
+            enc.encode();
         Sleep(sleepFor);
     }
 
