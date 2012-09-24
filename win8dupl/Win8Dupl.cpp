@@ -236,10 +236,12 @@ static DWORD WINAPI DuplThread(LPVOID lpParameter)
             if (FrameInfo.LastMouseUpdateTime.QuadPart != 0 && FrameInfo.PointerPosition.Visible) {
                 // handle mouse information
                 if (FrameInfo.PointerShapeBufferSize) {
+                    if (data->PointerSize < FrameInfo.PointerShapeBufferSize) {
+                        data->PointerSize = FrameInfo.PointerShapeBufferSize;
+                        delete[] data->PointerBuffer;
+                        data->PointerBuffer = new uint8_t[data->PointerSize];
+                    }
                     UINT BufferSizeRequired;
-                    data->PointerSize = FrameInfo.PointerShapeBufferSize;
-                    delete[] data->PointerBuffer;
-                    data->PointerBuffer = new uint8_t[data->PointerSize];
                     hr = data->DeskDupl->GetFramePointerShape(FrameInfo.PointerShapeBufferSize, data->PointerBuffer, &BufferSizeRequired, &data->PointerShape);
                     if (FAILED(hr)) {
                         fprintf(stderr, "GetFramePointerShape failed 0x%x\n", hr);
