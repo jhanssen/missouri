@@ -49,7 +49,7 @@ Win8Capturer::Win8Capturer()
 
     mBmpBuffer = new uint8_t[(mWidth * mHeight) * 4];
 
-    mPriv->lib = LoadLibraryA("..\\win8dupl\\Win8Dupl\\Release\\Win8Dupl.dll");
+    mPriv->lib = LoadLibraryA("..\\win8dupl\\Release\\Win8Dupl.dll");
     if (!mPriv->lib) {
         printf("library load failure\n");
         return;
