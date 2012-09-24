@@ -13,7 +13,7 @@
 
 struct HandleData
 {
-	ID3D11Device* Device;
+    ID3D11Device* Device;
     ID3D11DeviceContext* Context;
     IDXGIOutputDuplication* DeskDupl;
     
