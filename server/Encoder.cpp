@@ -40,23 +40,53 @@ public:
 
     int outputWidth, outputHeight;
     std::vector<Host> destinations;
+    UdpSocket socket;
 
     bool stopped;
+
+    uint8_t* nalBuffer;
+    int nalBufferSize;
+    int nalCount;
 };
 
-static inline void sendHeader(const Host& host, UdpSocket& socket, uint32_t nalCount)
+static void processNals(x264_t *h, x264_nal_t *nal, void *opaque)
+{
+    EncoderPrivate* priv = static_cast<EncoderPrivate*>(opaque);
+    const int targetSize = nal->i_payload*3/2 + 5 + 16;
+    if (targetSize > priv->nalBufferSize) {
+        delete[] priv->nalBuffer;
+        priv->nalBuffer = new uint8_t[targetSize];
+        priv->nalBufferSize = targetSize;
+    }
+    x264_nal_encode(h, priv->nalBuffer, nal);
+
+    pthread_mutex_lock(&priv->mutex);
+    ++priv->nalCount;
+    std::vector<Host>::const_iterator it = priv->destinations.begin();
+    const std::vector<Host>::const_iterator end = priv->destinations.end();
+    while (it != end) {
+        const int packetSize = nal->i_payload; // ### right?
+        const uint8_t* payload = nal->p_payload;
+        //printf("nal %d (%d %p)\n", i, packetSize, payload);
+
+        //stream_frame(avctx, nals[i].p_payload, nals[i].i_payload);
+        priv->socket.send(*it, reinterpret_cast<const char*>(payload), packetSize);
+        ++it;
+    }
+    pthread_mutex_unlock(&priv->mutex);
+}
+
+static inline void sendSeparator(const Host& host, UdpSocket& socket, uint32_t count)
 {
     static uint64_t header = 0xbeeffeed00000000LL;
     //printf("sending %u nals\n", nalCount);
     header &= 0xffffffff00000000LL;
-    header |= static_cast<uint64_t>(nalCount);
+    header |= static_cast<uint64_t>(count);
     socket.send(host, reinterpret_cast<char*>(&header), 8);
 }
 
 void* EncoderPrivate::run(void* arg)
 {
-    UdpSocket socket;
-
     EncoderPrivate* priv = static_cast<EncoderPrivate*>(arg);
     const int32_t w = priv->width;
     const int32_t h = priv->height;
@@ -78,36 +108,26 @@ void* EncoderPrivate::run(void* arg)
 
         int srcstride = w * 4; // RGB stride is 3 * width
         sws_scale(priv->scale, &priv->input, &srcstride, 0, h, priv->pic_in.img.plane, priv->pic_in.img.i_stride);
+
         x264_nal_t* nals;
         int i_nals;
-        const int frame_size = x264_encoder_encode(priv->encoder, &nals, &i_nals, &priv->pic_in, &priv->pic_out);
-        if (frame_size >= 0) {
-            //printf("frame %d, size %d\n", frame, frame_size);
-            ++frame;
+        (void)x264_encoder_encode(priv->encoder, &nals, &i_nals, &priv->pic_in, &priv->pic_out);
 
-            pthread_mutex_lock(&priv->mutex);
+        pthread_mutex_lock(&priv->mutex);
+
+        if (priv->nalCount) {
             std::vector<Host>::const_iterator it = priv->destinations.begin();
             const std::vector<Host>::const_iterator end = priv->destinations.end();
             while (it != end) {
-                sendHeader(*it, socket, i_nals);
-                for (int i = 0; i < i_nals; ++i) {
-                    const int packetSize = nals[i].i_payload; // ### right?
-                    const uint8_t* payload = nals[i].p_payload;
-                    //printf("nal %d (%d %p)\n", i, packetSize, payload);
-
-                    //stream_frame(avctx, nals[i].p_payload, nals[i].i_payload);
-                    socket.send(*it, reinterpret_cast<const char*>(payload), packetSize);
-                }
+                sendSeparator(*it, priv->socket, priv->nalCount);
                 ++it;
             }
-            pthread_mutex_unlock(&priv->mutex);
-        } else {
-            fprintf(stderr, "bad frame!\n");
+            priv->nalCount = 0;
         }
 
-        pthread_mutex_lock(&priv->mutex);
         priv->encoding = false;
         pthread_cond_signal(&priv->doneCond);
+
         pthread_mutex_unlock(&priv->mutex);
         sched_yield();
     }
@@ -123,6 +143,8 @@ Encoder::Encoder(const uint8_t* buffer, int32_t width, int32_t height)
     mPriv->width = width;
     mPriv->height = height;
     mPriv->outputWidth = mPriv->outputHeight = 0;
+    mPriv->nalBuffer = 0;
+    mPriv->nalBufferSize = mPriv->nalCount = 0;
 
     pthread_mutex_init(&mPriv->mutex, 0);
     pthread_cond_init(&mPriv->encodeCond, 0);
@@ -208,10 +230,18 @@ void Encoder::init()
     memcpy(mPriv->pps, p_nal[1].p_payload + 4, mPriv->ppsSize);
 
     x264_picture_alloc(&mPriv->pic_in, X264_CSP_I420, mPriv->outputWidth, mPriv->outputHeight);
+    mPriv->pic_in.opaque = mPriv;
 
     mPriv->scale = sws_getContext(mPriv->width, mPriv->height, PIX_FMT_RGB32,
                                   mPriv->outputWidth, mPriv->outputHeight,
                                   PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+
+    // x264_encoder_headers() crashes when nalu_process is set
+    // additionally, x264_encoder_reconfigure doesn't respect nalu_process
+    // so a close and reopen is required here
+    param.nalu_process = processNals;
+    x264_encoder_close(mPriv->encoder);
+    mPriv->encoder = x264_encoder_open(&param);
 
     pthread_create(&mPriv->thread, 0, EncoderPrivate::run, mPriv);
 }
