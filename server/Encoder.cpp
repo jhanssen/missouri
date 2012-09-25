@@ -201,7 +201,6 @@ void Encoder::init()
     param.rc.i_vbv_buffer_size = 400;
     param.rc.i_rc_method = X264_RC_CRF;
     param.rc.f_rf_constant = 19;
-    param.rc.f_rf_constant_max = 20;
     x264_param_apply_profile(&param, "high");
 
     mPriv->encoding = false;
