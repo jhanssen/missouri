@@ -403,7 +403,7 @@ extern "C" WIN8DUPL_API int StartDuplication(DuplicationHandle* handle, FrameCal
     InitializeCriticalSection(&data->Mutex);
     data->Thread = CreateThread(0, 0, DuplThread, data, 0, &data->ThreadId);
 
-	return DUPL_SUCCESS;
+    return DUPL_SUCCESS;
 }
 
 extern "C" WIN8DUPL_API void StopDuplication(DuplicationHandle handle)
