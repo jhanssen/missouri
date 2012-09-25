@@ -18,7 +18,7 @@ struct HandleData
     IDXGIOutputDuplication* DeskDupl;
 
     uint8_t* PointerBuffer;
-    int PointerSize;
+    unsigned int PointerSize;
     DXGI_OUTDUPL_POINTER_SHAPE_INFO PointerShape;
     DXGI_OUTDUPL_POINTER_POSITION PointerPosition;
     
