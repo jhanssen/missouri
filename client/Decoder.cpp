@@ -16,7 +16,6 @@ public:
         int size;
     };
     std::deque<Buffer> datas;
-    uint32_t packetCount;
     uint32_t total;
 #ifdef OS_Darwin
     VDADecoder decoder;
@@ -46,7 +45,6 @@ Decoder::Decoder()
     : mPriv(new DecoderPrivate)
 {
     mPriv->inited = false;
-    mPriv->packetCount = 0;
     mPriv->total = 0;
 }
 
@@ -156,7 +154,7 @@ void Decoder::decode(const char* data, int size)
     //printf("decoding %d\n", size);
     assert(size > 2);
 
-    if (size == 8) { // is this a header?
+    if (size == 8) { // is this a separator?
         /*
         printf("potential header ");
         for (int i = 0; i < 8; ++i) {
@@ -165,100 +163,75 @@ void Decoder::decode(const char* data, int size)
         printf("\n");
         */
         const uint64_t hdr = *reinterpret_cast<const uint64_t*>(data);
-        if (((hdr & 0xffffffff00000000LL) >> 32) == 0xbeeffeed) { // yes!
+        if (((hdr & 0xffffffff00000000LL) >> 32) == 0xbeeffeed) { // yes!const uint32_t hdr = *reinterpret_cast<const uint32_t*>(data);
             //printf("found header\n");
-            if (!mPriv->datas.empty()) { // we didn't get the entire previous block of data
+            const uint32_t nalCount = (hdr & 0x00000000ffffffffLL);
+            if (!mPriv->datas.empty()) {
+                // we got data
+
+                // reassemble!
+                mPriv->frame = new uint8_t[mPriv->total];
+                mPriv->framePos = 0;
+                mPriv->frameSize = mPriv->total;
+                uint8_t* buf = mPriv->frame;
+                int left = mPriv->datas.size() - nalCount;
                 std::deque<DecoderPrivate::Buffer>::const_iterator it = mPriv->datas.begin();
                 const std::deque<DecoderPrivate::Buffer>::const_iterator end = mPriv->datas.end();
                 while (it != end) {
+                    if (--left > 0) {
+                        mPriv->frameSize -= it->size;
+                        continue;
+                    }
+                    memcpy(buf, it->data, it->size);
+                    buf += it->size;
                     free(it->data);
                     ++it;
                 }
                 mPriv->datas.clear();
-                mPriv->packetCount = 0;
                 mPriv->total = 0;
+
+                /*
+                  for (int i = 0; i < 16; ++i)
+                  printf("%02x ", mPriv->frame[i]);
+                  printf("\nframe done\n");
+                */
+
+#ifdef OS_Darwin
+                CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, mPriv->frame, mPriv->frameSize);
+
+                CFDictionaryRef frameInfo = NULL;
+                OSStatus status = kVDADecoderNoErr;
+
+                // create a dictionary containg some information about the frame being decoded
+                // in this case, we pass in the display time aquired from the stream
+                frameInfo = MakeDictionaryWithDisplayTime(0 /*inFrameDisplayTime*/);
+
+                // ask the hardware to decode our frame, frameInfo will be retained and pased back to us
+                // in the output callback for this frame
+                status = VDADecoderDecode(mPriv->decoder, 0, frameData, frameInfo);
+                if (kVDADecoderNoErr != status) {
+                    fprintf(stderr, "VDADecoderDecode failed. err: %d\n", status);
+                }
+
+                // the dictionary passed into decode is retained by the framework so
+                // make sure to release it here
+                CFRelease(frameInfo);
+
+                CFRelease(frameData);
+#endif
+
+                delete[] mPriv->frame;
+
+                return;
             }
-
-            mPriv->packetCount = (hdr & 0x00000000ffffffffLL);
-            return;
         }
-    }
-
-    if (mPriv->packetCount == 0) { // haven't seen a header yet
-        //printf("no header so far\n");
-        return;
     }
 
     // make a copy of the data
     uint8_t* buf = new uint8_t[size];
     memcpy(buf, data, size);
 
-    if (mPriv->packetCount == 1) { // optimize for the case where the block only has one datagram
-        mPriv->frame = buf;
-        mPriv->framePos = 0;
-        mPriv->frameSize = size;
-    } else {
-        DecoderPrivate::Buffer buffer = { buf, size };
-        mPriv->total += size;
-        mPriv->datas.push_back(buffer);
-    }
-
-    if (mPriv->datas.size() < mPriv->packetCount) { // haven't gotten all datagrams yet
-        //printf("wanted %d, got %lu so far\n", mPriv->packetCount, mPriv->datas.size());
-        return;
-    }
-
-    assert(mPriv->packetCount >= mPriv->datas.size());
-
-    if (mPriv->packetCount > 1) {
-        // reassemble!
-        mPriv->frame = new uint8_t[mPriv->total];
-        mPriv->framePos = 0;
-        mPriv->frameSize = mPriv->total;
-        mPriv->packetCount = 0;
-        buf = mPriv->frame;
-        std::deque<DecoderPrivate::Buffer>::const_iterator it = mPriv->datas.begin();
-        const std::deque<DecoderPrivate::Buffer>::const_iterator end = mPriv->datas.end();
-        while (it != end) {
-            memcpy(buf, it->data, it->size);
-            buf += it->size;
-            free(it->data);
-            ++it;
-        }
-        mPriv->datas.clear();
-        assert(buf == mPriv->frame + mPriv->total);
-        mPriv->total = 0;
-    }
-
-    /*
-    for (int i = 0; i < 16; ++i)
-        printf("%02x ", mPriv->frame[i]);
-    printf("\nframe done\n");
-    */
-
-#ifdef OS_Darwin
-    CFDataRef frameData = CFDataCreate(kCFAllocatorDefault, mPriv->frame, mPriv->frameSize);
-
-    CFDictionaryRef frameInfo = NULL;
-    OSStatus status = kVDADecoderNoErr;
-
-    // create a dictionary containg some information about the frame being decoded
-    // in this case, we pass in the display time aquired from the stream
-    frameInfo = MakeDictionaryWithDisplayTime(0 /*inFrameDisplayTime*/);
-
-    // ask the hardware to decode our frame, frameInfo will be retained and pased back to us
-    // in the output callback for this frame
-    status = VDADecoderDecode(mPriv->decoder, 0, frameData, frameInfo);
-    if (kVDADecoderNoErr != status) {
-        fprintf(stderr, "VDADecoderDecode failed. err: %d\n", status);
-    }
-
-    // the dictionary passed into decode is retained by the framework so
-    // make sure to release it here
-    CFRelease(frameInfo);
-
-    CFRelease(frameData);
-#endif
-
-    delete[] mPriv->frame;
+    DecoderPrivate::Buffer buffer = { buf, size };
+    mPriv->total += size;
+    mPriv->datas.push_back(buffer);
 }
