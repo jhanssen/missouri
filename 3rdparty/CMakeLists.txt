@@ -21,6 +21,7 @@ ExternalProject_Add(
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg
     GIT_REPOSITORY "git://source.ffmpeg.org/ffmpeg.git"
     GIT_TAG "n0.11.1"
+    PATCH_COMMAND patch -p1 -t -N < ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg.patch
     CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/configure --enable-static --prefix="${CMAKE_CURRENT_SOURCE_DIR}" --disable-debug
     PREFIX ${CMAKE_CURRENT_SOURCE_DIR}
     BUILD_COMMAND "$(MAKE)"
