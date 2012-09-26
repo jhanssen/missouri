@@ -1,4 +1,5 @@
 #include "Win8Capturer.h"
+#include "Util.h"
 #include <Win8Dupl.h>
 #include <Windows.h>
 #include <cassert>
@@ -12,7 +13,7 @@ public:
     StopDuplicationPtr stop;
     DuplicationHandle handle;
 
-    CRITICAL_SECTION mutex;
+    Mutex* mutex;
     void* data;
     int width, height, pitch;
     int prevsize;
@@ -24,7 +25,7 @@ void Win8CapturerPrivate::frameCallback(DuplicationHandle handle, void* data, in
 {
     Win8CapturerPrivate* priv = static_cast<Win8CapturerPrivate*>(userData);
     //printf("frame callback %dx%d\n", width, height);
-    EnterCriticalSection(&priv->mutex);
+    MutexLocker locker(priv->mutex);
     if (priv->prevsize != (pitch * height)) {
         if (priv->data)
             free(priv->data);
@@ -35,14 +36,13 @@ void Win8CapturerPrivate::frameCallback(DuplicationHandle handle, void* data, in
         priv->pitch = pitch;
     }
     memcpy(priv->data, data, priv->prevsize);
-    LeaveCriticalSection(&priv->mutex);
 }
 
 Win8Capturer::Win8Capturer()
     : mPriv(new Win8CapturerPrivate)
 {
     memset(mPriv, 0, sizeof(Win8CapturerPrivate));
-    InitializeCriticalSection(&mPriv->mutex);
+    mPriv->mutex = new Mutex;
 
     mWidth = GetSystemMetrics(SM_CXSCREEN);
     mHeight = GetSystemMetrics(SM_CYSCREEN);
@@ -80,18 +80,16 @@ Win8Capturer::~Win8Capturer()
     }
     if (mPriv->data)
         free(mPriv->data);
-    DeleteCriticalSection(&mPriv->mutex);
+    delete mPriv->mutex;
     delete mPriv;
     delete[] mBmpBuffer;
 }
 
 bool Win8Capturer::Capture()
 {
-    EnterCriticalSection(&mPriv->mutex);
-    if (!mPriv->data) {
-        LeaveCriticalSection(&mPriv->mutex);
+    MutexLocker(mPriv->mutex);
+    if (!mPriv->data)
         return false;
-    }
 
     //printf("cap %dx%d vs %dx%d\n", mWidth, mHeight, mPriv->width, mPriv->height);
 
@@ -111,6 +109,5 @@ bool Win8Capturer::Capture()
             src += p;
         }
     }
-    LeaveCriticalSection(&mPriv->mutex);
     return true;
 }
