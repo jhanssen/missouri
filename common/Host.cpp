@@ -1,9 +1,6 @@
 #include "Host.h"
 #ifdef OS_Windows
 # include <Winsock2.h>
-// Silly Windows, the following is required to get getaddrinfo/freeaddrinfo apparently
-# undef _WIN32_WINNT
-# define _WIN32_WINNT 0x0501
 # include <Ws2TcpIp.h>
 #else
 # include <sys/types.h>

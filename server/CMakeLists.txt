@@ -4,6 +4,9 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 add_definitions(-DOS_${CMAKE_SYSTEM_NAME})
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+    add_definitions(-D_WIN32_WINNT=0x0600)
+endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 
 set(server_LIBS
