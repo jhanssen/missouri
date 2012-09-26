@@ -18,6 +18,7 @@ set(client_SRCS
     ../common/TcpSocket.cpp
     ../common/TcpServer.cpp
     ../common/Receiver.cpp
+    ../common/Util.cpp
 )
 
 set(client_LIBS
