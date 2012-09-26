@@ -1,11 +1,11 @@
+#include <Winsock2.h>
+#include <Windows.h>
 #include "Win8Capturer.h"
 #include "Encoder.h"
 #include "Receiver.h"
 #include "TcpServer.h"
 #include "TcpSocket.h"
 #include "UdpSocket.h"
-#include <Windows.h>
-#include <Winsock2.h>
 #include <stdio.h>
 #include <assert.h>
 
