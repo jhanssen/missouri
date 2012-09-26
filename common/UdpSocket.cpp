@@ -10,7 +10,7 @@
 # include <errno.h>
 # include <unistd.h>
 #endif
-#include <pthread.h>
+#include "Util.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -53,7 +53,7 @@ static inline void close(SOCKET socket)
 typedef int SOCKET;
 #endif
 
-class UdpSocketPrivate
+class UdpSocketPrivate : public Thread
 {
 public:
     bool listening, stopped;
@@ -63,16 +63,15 @@ public:
 
     sockaddr_in to;
 
-    pthread_t thread;
-    pthread_mutex_t mutex;
+    Mutex mutex;
 
     UdpSocket::CallbackFunc callback;
     void* userData;
 
-    static void* run(void* arg);
+    virtual void run();
 };
 
-void* UdpSocketPrivate::run(void* arg)
+void UdpSocketPrivate::run()
 {
     sockaddr_in from;
     socklen_t fromlen;
@@ -81,53 +80,46 @@ void* UdpSocketPrivate::run(void* arg)
     fd_set fds;
     char buf[4096];
 
-    UdpSocketPrivate* priv = static_cast<UdpSocketPrivate*>(arg);
-
     for (;;) {
         tv.tv_sec = 5;
         tv.tv_usec = 0;
 
         FD_ZERO(&fds);
-        FD_SET(priv->server, &fds);
+        FD_SET(server, &fds);
 
-        ret = select(priv->server + 1, &fds, 0, 0, &tv);
+        ret = select(server + 1, &fds, 0, 0, &tv);
         if (ret == SOCKET_ERROR) {
             const int err = socketError();
             fprintf(stderr, "socket failed: %d %s\n", err, UdpSocket::socketErrorMessage(err).c_str());
-            return 0;
+            return;
         } else if (ret > 0) {
-            assert(FD_ISSET(priv->server, &fds));
+            assert(FD_ISSET(server, &fds));
             bool done;
             do {
                 done = true;
                 fromlen = sizeof(from);
-                ret = recvfrom(priv->server, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&from), &fromlen);
+                ret = recvfrom(server, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&from), &fromlen);
                 if (ret == SOCKET_ERROR) {
                     const int err = socketError();
                     if (err == EINTR)
                         done = false;
                     else {
                         fprintf(stderr, "socket recvfrom failed: %d %s\n", err, UdpSocket::socketErrorMessage(err).c_str());
-                        return 0;
+                        return;
                     }
                 }
                 //printf("got socket data %d\n", ret);
-                if (priv->callback && !priv->callback(buf, ret, priv->userData)) {
-                    return 0;
+                if (callback && !callback(buf, ret, userData)) {
+                    return;
                 }
             } while (!done);
         }
         //printf("server wakeup\n");
 
-        pthread_mutex_lock(&priv->mutex);
-        if (priv->stopped) {
-            pthread_mutex_unlock(&priv->mutex);
-            return 0;
-        }
-        pthread_mutex_unlock(&priv->mutex);
+        MutexLocker locker(&mutex);
+        if (stopped)
+            return;
     }
-
-    return 0;
 }
 
 UdpSocket::UdpSocket()
@@ -143,11 +135,10 @@ UdpSocket::~UdpSocket()
 {
     if (mPriv->listening) {
         void* ret;
-        pthread_mutex_lock(&mPriv->mutex);
+        MutexLocker locker(&mPriv->mutex);
         mPriv->stopped = true;
-        pthread_mutex_unlock(&mPriv->mutex);
-        pthread_join(mPriv->thread, &ret);
-        pthread_mutex_destroy(&mPriv->mutex);
+        locker.unlock();
+        mPriv->join();
 
         close(mPriv->server);
     }
@@ -186,9 +177,7 @@ bool UdpSocket::listen(uint16_t port)
         return false;
     }
 
-    pthread_mutex_init(&mPriv->mutex, 0);
-    pthread_create(&mPriv->thread, 0, UdpSocketPrivate::run, mPriv);
-
+    mPriv->start();
     mPriv->listening = true;
 
     return true;
