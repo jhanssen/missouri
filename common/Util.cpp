@@ -16,6 +16,21 @@ void* threadStart(void* arg)
 }
 #endif
 
+Thread::Thread()
+#ifdef OS_Windows
+    : thread(0)
+#endif
+{
+}
+
+Thread::~Thread()
+{
+#ifdef OS_Windows
+    if (thread)
+        CloseHandle(thread);
+#endif
+}
+
 void Thread::start()
 {
 #ifdef OS_Windows
@@ -32,5 +47,14 @@ void Thread::join()
 #else
     void* ret;
     pthread_join(thread, &ret);
+#endif
+}
+
+void Thread::yield()
+{
+#ifdef OS_Windows
+    SwitchToThread();
+#else
+    sched_yield();
 #endif
 }

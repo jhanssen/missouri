@@ -10,7 +10,7 @@
 class Thread
 {
 public:
-    Thread() {}
+    Thread();
     virtual ~Thread();
 
     void start();
@@ -165,22 +165,6 @@ inline void WaitCondition::broadcast()
     WakeAllConditionVariable(&cond);
 #else
     pthread_cond_broadcast(&cond);
-#endif
-}
-
-inline Thread::~Thread()
-{
-#ifdef OS_Windows
-    CloseHandle(thread);
-#endif
-}
-
-inline void Thread::yield()
-{
-#ifdef OS_Windows
-    SwitchToThread();
-#else
-    sched_yield();
 #endif
 }
 
