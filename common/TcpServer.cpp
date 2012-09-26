@@ -1,5 +1,3 @@
-#include "TcpServer.h"
-#include "TcpSocket.h"
 #ifdef OS_Windows
 # include <Winsock2.h>
 #else
@@ -11,7 +9,9 @@
 # include <errno.h>
 # include <unistd.h>
 #endif
-#include <pthread.h>
+#include "TcpServer.h"
+#include "TcpSocket.h"
+#include "Util.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -54,23 +54,24 @@ static inline void close(SOCKET socket)
 typedef int SOCKET;
 #endif
 
-class TcpServerPrivate
+class TcpServerPrivate : public Thread
 {
 public:
     bool listening, stopped;
 
     SOCKET server;
 
-    pthread_t thread;
-    pthread_mutex_t mutex;
-
     TcpServer::CallbackFunc callback;
     void* userData;
 
-    static void* run(void* arg);
+    virtual void run();
+
+    static Mutex mutex;
 };
 
-void* TcpServerPrivate::run(void* arg)
+Mutex TcpServerPrivate::mutex;
+
+void TcpServerPrivate::run()
 {
     sockaddr_in from;
     socklen_t fromlen;
@@ -79,55 +80,48 @@ void* TcpServerPrivate::run(void* arg)
     fd_set fds;
     char buf[4096];
 
-    TcpServerPrivate* priv = static_cast<TcpServerPrivate*>(arg);
-
     for (;;) {
         tv.tv_sec = 5;
         tv.tv_usec = 0;
 
         FD_ZERO(&fds);
-        FD_SET(priv->server, &fds);
+        FD_SET(server, &fds);
 
-        ret = select(priv->server + 1, &fds, 0, 0, &tv);
+        ret = select(server + 1, &fds, 0, 0, &tv);
         if (ret == SOCKET_ERROR) {
             const int err = socketError();
             fprintf(stderr, "TcpServer socket failed: %d %s\n", err, socketErrorMessage(err).c_str());
-            return 0;
+            return;
         } else if (ret > 0) {
-            assert(FD_ISSET(priv->server, &fds));
+            assert(FD_ISSET(server, &fds));
             bool done;
             do {
                 done = true;
                 fromlen = sizeof(from);
-                SOCKET sock = accept(priv->server, reinterpret_cast<sockaddr*>(&from), &fromlen);
+                SOCKET sock = accept(server, reinterpret_cast<sockaddr*>(&from), &fromlen);
                 if (sock == INVALID_SOCKET) {
                     const int err = socketError();
                     if (err == EINTR)
                         done = false;
                     else {
                         fprintf(stderr, "TcpServer socket accept failed: %d %s\n", err, socketErrorMessage(err).c_str());
-                        return 0;
+                        return;
                     }
                 }
                 //printf("TcpServer got new socket connection\n");
                 TcpSocket* socket = new TcpSocket;
                 socket->setSocketDescriptor(reinterpret_cast<void*>(&sock));
-                if (priv->callback && !priv->callback(socket, priv->userData)) {
-                    return 0;
+                if (callback && !callback(socket, userData)) {
+                    return;
                 }
             } while (!done);
         }
         //printf("TcpServer server wakeup\n");
 
-        pthread_mutex_lock(&priv->mutex);
-        if (priv->stopped) {
-            pthread_mutex_unlock(&priv->mutex);
-            return 0;
-        }
-        pthread_mutex_unlock(&priv->mutex);
+        MutexLocker locker(&mutex);
+        if (stopped)
+            return;
     }
-
-    return 0;
 }
 
 TcpServer::TcpServer()
@@ -142,11 +136,10 @@ TcpServer::~TcpServer()
 {
     if (mPriv->listening) {
         void* ret;
-        pthread_mutex_lock(&mPriv->mutex);
+        MutexLocker locker(&mPriv->mutex);
         mPriv->stopped = true;
-        pthread_mutex_unlock(&mPriv->mutex);
-        pthread_join(mPriv->thread, &ret);
-        pthread_mutex_destroy(&mPriv->mutex);
+        locker.unlock();
+        mPriv->join();
 
         close(mPriv->server);
     }
@@ -188,9 +181,7 @@ bool TcpServer::listen(uint16_t port)
         return false;
     }
 
-    pthread_mutex_init(&mPriv->mutex, 0);
-    pthread_create(&mPriv->thread, 0, TcpServerPrivate::run, mPriv);
-
+    mPriv->start();
     mPriv->listening = true;
 
     return true;
