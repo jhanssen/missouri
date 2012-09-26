@@ -11,7 +11,7 @@ class Thread
 {
 public:
     Thread() {}
-    virtual ~Thread() {}
+    virtual ~Thread();
 
     void start();
     void join();
@@ -165,6 +165,13 @@ inline void WaitCondition::broadcast()
     WakeAllConditionVariable(&cond);
 #else
     pthread_cond_broadcast(&cond);
+#endif
+}
+
+inline Thread::~Thread()
+{
+#ifdef OS_Windows
+    CloseHandle(thread);
 #endif
 }
 
