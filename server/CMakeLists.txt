@@ -31,6 +31,7 @@ set(server_SRCS
     ../common/UdpSocket.cpp
     ../common/TcpSocket.cpp
     ../common/TcpServer.cpp
+    ../common/Util.cpp
 )
 
 include_directories(${server_INCS})
