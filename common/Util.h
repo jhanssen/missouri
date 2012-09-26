@@ -16,6 +16,8 @@ public:
     void start();
     void join();
 
+    static void yield();
+
 protected:
     virtual void run() = 0;
 
@@ -163,6 +165,15 @@ inline void WaitCondition::broadcast()
     WakeAllConditionVariable(&cond);
 #else
     pthread_cond_broadcast(&cond);
+#endif
+}
+
+inline void Thread::yield()
+{
+#ifdef OS_Windows
+    SwitchToThread();
+#else
+    sched_yield();
 #endif
 }
 
