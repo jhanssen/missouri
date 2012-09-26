@@ -12,13 +12,13 @@ class Thread
 public:
     Thread() {}
     virtual ~Thread() {}
-    
+
     void start();
     void join();
-    
+
 protected:
     virtual void run() = 0;
-    
+
 private:
 #ifdef OS_Windows
     HANDLE thread;
@@ -34,7 +34,7 @@ class Mutex
 public:
     Mutex();
     ~Mutex();
-    
+
     void lock();
     void unlock();
 
@@ -51,10 +51,10 @@ class MutexLocker
 public:
     MutexLocker(Mutex* mutex) : m(mutex), locked(true) { m->lock(); }
     ~MutexLocker() { if (locked) m->unlock(); }
-    
+
     void unlock() { if (!locked) return; locked = false; m->unlock(); }
     void relock() { if (locked) return; locked = true; m->lock(); }
-    
+
 private:
     Mutex* m;
     bool locked;
