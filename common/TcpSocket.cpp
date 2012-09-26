@@ -10,7 +10,7 @@
 # include <errno.h>
 # include <unistd.h>
 #endif
-#include <pthread.h>
+#include "Util.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -53,15 +53,14 @@ static inline void close(SOCKET socket)
 typedef int SOCKET;
 #endif
 
-class TcpSocketPrivate
+class TcpSocketPrivate : public Thread
 {
 public:
     bool connected, stopped;
 
     SOCKET client;
 
-    pthread_t thread;
-    pthread_mutex_t mutex;
+    Mutex mutex;
 
     TcpSocket::DataCallbackFunc dataCallback;
     void* dataUserData;
@@ -71,44 +70,41 @@ public:
     uint8_t* pending;
     int pendingSize;
 
-    static void* run(void* arg);
+    virtual void run();
 };
 
-void* TcpSocketPrivate::run(void* arg)
+void TcpSocketPrivate::run()
 {
     int ret;
     timeval tv;
     fd_set fds;
     char buf[4096];
 
-    TcpSocketPrivate* priv = static_cast<TcpSocketPrivate*>(arg);
-
     for (;;) {
         tv.tv_sec = 5;
         tv.tv_usec = 0;
 
         FD_ZERO(&fds);
-        FD_SET(priv->client, &fds);
+        FD_SET(client, &fds);
 
-        ret = select(priv->client + 1, &fds, 0, 0, &tv);
+        ret = select(client + 1, &fds, 0, 0, &tv);
         if (ret == SOCKET_ERROR) {
             const int err = socketError();
             fprintf(stderr, "TcpSocket select failed: %d %s\n", err, socketErrorMessage(err).c_str());
-            return 0;
+            return;
         } else if (ret > 0) {
-            assert(FD_ISSET(priv->client, &fds));
+            assert(FD_ISSET(client, &fds));
             bool done;
             do {
                 done = true;
-                ret = recv(priv->client, buf, sizeof(buf), 0);
+                ret = recv(client, buf, sizeof(buf), 0);
                 if (ret == 0) {
                     // connection closed
                     printf("TcpSocket connection closed\n");
-                    pthread_mutex_lock(&priv->mutex);
-                    if (priv->closeCallback)
-                        priv->closeCallback(priv->closeUserData);
-                    pthread_mutex_unlock(&priv->mutex);
-                    return 0;
+                    MutexLocker locker(&mutex);
+                    if (closeCallback)
+                        closeCallback(closeUserData);
+                    return;
                 } else if (ret == SOCKET_ERROR) {
                     const int err = socketError();
                     if (err == EINTR) {
@@ -116,46 +112,40 @@ void* TcpSocketPrivate::run(void* arg)
                     }
 #ifdef OS_Windows
                     else if (err == WSAECONNRESET) {
-                        if (priv->closeCallback)
-                            priv->closeCallback(priv->closeUserData);
-                        return 0;
+                        if (closeCallback)
+                            closeCallback(closeUserData);
+                        return;
                     }
 #endif
                     else {
                         fprintf(stderr, "TcpSocket recv error: %d %s\n", err, socketErrorMessage(err).c_str());
-                        return 0;
+                        return;
                     }
                 }
             } while (!done);
             //printf("TcpSocket got socket data %d\n", ret);
-            pthread_mutex_lock(&priv->mutex);
-            if (priv->dataCallback) {
-                if (!priv->dataCallback(buf, ret, priv->dataUserData))
-                    return 0;
+            MutexLocker locker(&mutex);
+            if (dataCallback) {
+                if (!dataCallback(buf, ret, dataUserData))
+                    return;
             } else {
-                if (!priv->pending) {
-                    priv->pending = reinterpret_cast<uint8_t*>(malloc(ret));
-                    memcpy(priv->pending, buf, ret);
-                    priv->pendingSize = ret;
+                if (!pending) {
+                    pending = reinterpret_cast<uint8_t*>(malloc(ret));
+                    memcpy(pending, buf, ret);
+                    pendingSize = ret;
                 } else {
-                    priv->pending = reinterpret_cast<uint8_t*>(realloc(priv->pending, priv->pendingSize + ret));
-                    memcpy(priv->pending + priv->pendingSize, buf, ret);
-                    priv->pendingSize += ret;
+                    pending = reinterpret_cast<uint8_t*>(realloc(pending, pendingSize + ret));
+                    memcpy(pending + pendingSize, buf, ret);
+                    pendingSize += ret;
                 }
             }
-            pthread_mutex_unlock(&priv->mutex);
         }
         //printf("tcp client wakeup\n");
 
-        pthread_mutex_lock(&priv->mutex);
-        if (priv->stopped) {
-            pthread_mutex_unlock(&priv->mutex);
-            return 0;
-        }
-        pthread_mutex_unlock(&priv->mutex);
+        MutexLocker locker(&mutex);
+        if (stopped)
+            return;
     }
-
-    return 0;
 }
 
 TcpSocket::TcpSocket()
@@ -174,11 +164,10 @@ TcpSocket::~TcpSocket()
     if (mPriv->connected) {
         void* ret;
 
-        pthread_mutex_lock(&mPriv->mutex);
+        MutexLocker locker(&mPriv->mutex);
         mPriv->stopped = true;
-        pthread_mutex_unlock(&mPriv->mutex);
-        pthread_join(mPriv->thread, &ret);
-        pthread_mutex_destroy(&mPriv->mutex);
+        locker.unlock();
+        mPriv->join();
 
         close(mPriv->client);
     }
@@ -190,7 +179,7 @@ TcpSocket::~TcpSocket()
 
 void TcpSocket::setDataCallback(DataCallbackFunc callback, void* userData)
 {
-    pthread_mutex_lock(&mPriv->mutex);
+    MutexLocker locker(&mPriv->mutex);
     mPriv->dataCallback = callback;
     mPriv->dataUserData = userData;
     if (mPriv->pending) {
@@ -199,15 +188,13 @@ void TcpSocket::setDataCallback(DataCallbackFunc callback, void* userData)
         mPriv->pending = 0;
         mPriv->pendingSize = 0;
     }
-    pthread_mutex_unlock(&mPriv->mutex);
 }
 
 void TcpSocket::setCloseCallback(CloseCallbackFunc callback, void* userData)
 {
-    pthread_mutex_lock(&mPriv->mutex);
+    MutexLocker locker(&mPriv->mutex);
     mPriv->closeCallback = callback;
     mPriv->closeUserData = userData;
-    pthread_mutex_unlock(&mPriv->mutex);
 }
 
 bool TcpSocket::connect(const Host& host)
@@ -232,9 +219,7 @@ bool TcpSocket::connect(const Host& host)
         return false;
     }
 
-    pthread_mutex_init(&mPriv->mutex, 0);
-    pthread_create(&mPriv->thread, 0, TcpSocketPrivate::run, mPriv);
-
+    mPriv->start();
     mPriv->connected = true;
 
     return true;
@@ -274,9 +259,7 @@ void TcpSocket::setSocketDescriptor(void* socket)
         return;
     mPriv->client = *reinterpret_cast<SOCKET*>(socket);
 
-    pthread_mutex_init(&mPriv->mutex, 0);
-    pthread_create(&mPriv->thread, 0, TcpSocketPrivate::run, mPriv);
-
+    mPriv->start();
     mPriv->connected = true;
 }
 
